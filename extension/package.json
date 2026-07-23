@@ -1,0 +1,102 @@
+{
+  "name": "tiangz-developer-tools",
+  "displayName": "TiangZ Developer Tools",
+  "description": "TiangZ Process、Scene、Component 与 Handler 工程工具",
+  "version": "0.1.0",
+  "publisher": "moulo",
+  "author": "moulo",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.91.0"
+  },
+  "activationEvents": [
+    "onView:tiangzProject",
+    "workspaceContains:configs",
+    "workspaceContains:app/core"
+  ],
+  "main": "./dist/extension.cjs",
+  "categories": [
+    "Other"
+  ],
+  "keywords": [
+    "TiangZ",
+    "Scene",
+    "Actor",
+    "Component",
+    "Handler"
+  ],
+  "files": [
+    "dist/extension.cjs",
+    "dist/extension.cjs.map",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "build": "node ../tools/build-extension.mjs",
+    "check:package": "vsce ls --no-dependencies",
+    "prepackage": "node -e \"require('node:fs').mkdirSync('../dist', { recursive: true })\"",
+    "package": "npm run build && vsce package --no-dependencies --out ../dist/tiangz-developer-tools-0.1.0.vsix"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.91.0",
+    "@vscode/vsce": "^3.6.2"
+  },
+  "contributes": {
+    "views": {
+      "explorer": [
+        {
+          "id": "tiangzProject",
+          "name": "TiangZ 工程"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "tiangzDeveloperTools.refreshProject",
+        "title": "TiangZ：刷新工程索引",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "tiangzDeveloperTools.showProjectSummary",
+        "title": "TiangZ：显示工程摘要"
+      },
+      {
+        "command": "tiangzDeveloperTools.openLocation",
+        "title": "TiangZ：打开声明"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "tiangzDeveloperTools.refreshProject",
+          "when": "view == tiangzProject",
+          "group": "navigation"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "tiangzDeveloperTools.openLocation",
+          "when": "view == tiangzProject && viewItem == tiangzLocation",
+          "group": "inline"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "TiangZ Developer Tools",
+      "properties": {
+        "tiangzDeveloperTools.configRoot": {
+          "type": "string",
+          "default": "configs",
+          "description": "TiangZ 启动配置相对于工作区的目录。"
+        },
+        "tiangzDeveloperTools.sourceRoots": {
+          "type": "array",
+          "default": ["app"],
+          "items": { "type": "string" },
+          "description": "需要索引 Scene、Component 与 Handler 的 TypeScript 源码目录。"
+        }
+      }
+    }
+  }
+}
