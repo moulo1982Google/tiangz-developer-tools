@@ -35,6 +35,14 @@ test("creates one file discovery plan from the generated manifest", () => {
   ]);
 });
 
+test("indexes generator commands from the project manifest", () => {
+  const snapshot = analyzeTiangZProject([{
+    relativePath: "codegen.manifest.json",
+    text: JSON.stringify(generatedManifest({ command: "npm run codegen:proto" })),
+  }]);
+  assert.deepEqual(snapshot.generators, [{ id: "test", command: "npm run codegen:proto" }]);
+});
+
 const sources = [
   {
     relativePath: "configs/local/map1.json",

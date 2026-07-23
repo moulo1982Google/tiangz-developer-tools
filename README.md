@@ -17,6 +17,7 @@ TiangZ 框架的工程模型、静态检查与 VS Code 开发工具。
 - 检查 Core、Generated/Model、Model、Hotfix、Game 与业务目录的依赖方向。
 - 根据 `codegen.manifest.json` 检测生成文件过期、缺失、遗留或被手工修改。
 - 提供与 VS Code Problems 使用相同规则的 `tiangz-check-project` 命令，可直接接入 CI。
+- 从工程树、命令面板或 Proto/Native 文件右键菜单定向运行 Manifest 中的生成器。
 - 独立 Language Server 使用 150ms 防抖，不保留 TypeScript AST，并提供运行状态指标。
 - 从工程树、原生资源管理器或命令面板运行、调试、停止和重启单个 Process。
 - 将 StartMachine 的 Process 展开为独立 VS Code Task，可分别查看 PID、日志和状态。
@@ -32,7 +33,7 @@ npm run check
 npm run package:extension
 ```
 
-生成的 VSIX 位于 `dist/tiangz-developer-tools-0.6.0.vsix`。
+生成的 VSIX 位于 `dist/tiangz-developer-tools-0.7.0.vsix`。
 
 检查任意 TiangZ 工程：
 
@@ -76,6 +77,8 @@ node dist/tiangz-check-project.cjs E:\gitee\TiangZ --format json
 生成器所有权和诊断说明见[Generated 完整性检查](docs/generated-integrity.md)。
 
 命令行参数、退出码和 CI 示例见[工程检查 CLI](docs/check-project-cli.md)。
+
+定向生成入口、任务行为和安全边界见[定向代码生成](docs/codegen-actions.md)。
 
 ## 工程边界
 

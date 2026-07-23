@@ -1,6 +1,7 @@
 import * as vscode from "vscode";
 
 import type {
+  CodegenGeneratorModel,
   HandlerModel,
   MachineConfigModel,
   ProcessConfigModel,
@@ -12,6 +13,7 @@ import type {
 } from "../../packages/project-core/src/types.js";
 
 import type { IndexedProject } from "./projectIndex.js";
+import { generatorLabel } from "./codegenTaskManager.js";
 import { processKey, type ManagedProcessStatus } from "./processManager.js";
 
 export class ProjectTreeProvider implements vscode.TreeDataProvider<ProjectNode> {
@@ -69,6 +71,7 @@ export interface ProjectNode {
   readonly rootUri?: string;
   readonly process?: ProcessConfigModel;
   readonly machine?: MachineConfigModel;
+  readonly generator?: CodegenGeneratorModel;
   readonly children: readonly ProjectNode[];
 }
 
@@ -81,6 +84,7 @@ function projectNode(
   const rootUri = project.folder.uri.toString();
   const categories = [
     environmentsNode(snapshot, rootUri, statuses),
+    generatorsNode(snapshot.generators, rootUri),
     declarationsNode("入口 Scene", "server-process", "entryScene", snapshot),
     declarationsNode("动态 Scene", "symbol-namespace", "scene", snapshot),
     declarationsNode("Actor", "symbol-class", "actor", snapshot),
@@ -94,6 +98,24 @@ function projectNode(
     description: `${snapshot.processes.length} Process / ${snapshot.handlers.length} Handler`,
     icon: "project",
     children: categories,
+  };
+}
+
+function generatorsNode(generators: readonly CodegenGeneratorModel[], rootUri: string): ProjectNode {
+  return {
+    label: "代码生成",
+    description: String(generators.length),
+    icon: "tools",
+    children: generators.map((generator) => ({
+      label: generatorLabel(generator.id),
+      description: generator.command,
+      tooltip: `${generator.id}\n${generator.command}`,
+      icon: "run",
+      contextValue: "tiangzCodegenGenerator",
+      rootUri,
+      generator,
+      children: [],
+    })),
   };
 }
 

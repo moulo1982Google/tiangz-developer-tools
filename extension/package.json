@@ -2,7 +2,7 @@
   "name": "tiangz-developer-tools",
   "displayName": "TiangZ Developer Tools",
   "description": "TiangZ Process、Scene、协议导航、运行与 TypeScript 调试工具",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "publisher": "moulo",
   "author": "moulo",
   "license": "MIT",
@@ -48,7 +48,7 @@
     "build": "node ../tools/build-extension.mjs",
     "check:package": "vsce ls --no-dependencies",
     "prepackage": "node -e \"require('node:fs').mkdirSync('../dist', { recursive: true })\"",
-    "package": "npm run build && vsce package --no-dependencies --out ../dist/tiangz-developer-tools-0.6.0.vsix"
+    "package": "npm run build && vsce package --no-dependencies --out ../dist/tiangz-developer-tools-0.7.0.vsix"
   },
   "devDependencies": {
     "@types/vscode": "^1.91.0",
@@ -79,6 +79,18 @@
               "debug"
             ],
             "description": "Process 启动模式。"
+          }
+        }
+      },
+      {
+        "type": "tiangz-codegen",
+        "required": [
+          "generator"
+        ],
+        "properties": {
+          "generator": {
+            "type": "string",
+            "description": "codegen.manifest.json 中的生成器 ID。"
           }
         }
       }
@@ -112,6 +124,27 @@
       {
         "command": "tiangzDeveloperTools.openUriLocation",
         "title": "TiangZ：打开协议位置"
+      },
+      {
+        "command": "tiangzDeveloperTools.runCodegen",
+        "title": "TiangZ：运行代码生成器...",
+        "icon": "$(tools)"
+      },
+      {
+        "command": "tiangzDeveloperTools.regenerateProto",
+        "title": "TiangZ：重新生成 Proto 协议"
+      },
+      {
+        "command": "tiangzDeveloperTools.regenerateNativeData",
+        "title": "TiangZ：重新生成 Native 数据"
+      },
+      {
+        "command": "tiangzDeveloperTools.regenerateScenes",
+        "title": "TiangZ：重新生成 Scene 与服务端 Handler"
+      },
+      {
+        "command": "tiangzDeveloperTools.regenerateClientHandlers",
+        "title": "TiangZ：重新生成客户端 Handler"
       },
       {
         "command": "tiangzDeveloperTools.runProcess",
@@ -164,6 +197,11 @@
           "command": "tiangzDeveloperTools.stopAllProcesses",
           "when": "view == tiangzProject",
           "group": "navigation@2"
+        },
+        {
+          "command": "tiangzDeveloperTools.runCodegen",
+          "when": "view == tiangzProject",
+          "group": "navigation@3"
         }
       ],
       "view/item/context": [
@@ -206,6 +244,11 @@
           "command": "tiangzDeveloperTools.stopMachine",
           "when": "view == tiangzProject && viewItem == tiangzMachineConfig",
           "group": "tiangzRun@2"
+        },
+        {
+          "command": "tiangzDeveloperTools.runCodegen",
+          "when": "view == tiangzProject && viewItem == tiangzCodegenGenerator",
+          "group": "inline"
         }
       ],
       "explorer/context": [
@@ -238,6 +281,21 @@
           "command": "tiangzDeveloperTools.stopMachine",
           "when": "resourceFilename == StartMachine.json",
           "group": "tiangzRun@2"
+        },
+        {
+          "command": "tiangzDeveloperTools.regenerateProto",
+          "when": "resourceExtname == .proto",
+          "group": "tiangzCodegen@1"
+        },
+        {
+          "command": "tiangzDeveloperTools.regenerateNativeData",
+          "when": "resourceExtname == .native",
+          "group": "tiangzCodegen@2"
+        },
+        {
+          "command": "tiangzDeveloperTools.runCodegen",
+          "when": "resourceFilename == codegen.manifest.json",
+          "group": "tiangzCodegen@3"
         }
       ]
     },

@@ -9,7 +9,12 @@ import {
 } from "vscode-languageclient/node";
 
 import { resolveMachineProcessPaths } from "../../packages/project-core/src/launch.js";
-import type { ProcessConfigModel, TiangZProjectSnapshot } from "../../packages/project-core/src/types.js";
+import type {
+  CodegenGeneratorModel,
+  ProcessConfigModel,
+  TiangZProjectSnapshot,
+} from "../../packages/project-core/src/types.js";
+import { CodegenTaskManager, generatorLabel } from "./codegenTaskManager.js";
 import { attachDebugger, prepareDebugLaunch } from "./debugSession.js";
 import {
   discoverWorkspaceFolder,
@@ -49,6 +54,7 @@ let client: LanguageClient | undefined;
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
   const tree = new ProjectTreeProvider();
   const processManager = new TiangZProcessManager(vscode.window.createOutputChannel("TiangZ 启动与构建"));
+  const codegenTaskManager = new CodegenTaskManager();
   const debugSessions = new Map<string, vscode.DebugSession>();
   const view = vscode.window.createTreeView("tiangzProject", { treeDataProvider: tree, showCollapseAll: true });
   let projects: readonly IndexedProject[] = [];
@@ -135,6 +141,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   context.subscriptions.push(
     view,
     processManager,
+    codegenTaskManager,
     processStateSubscription,
     ...watchers,
     snapshotSubscription,
@@ -147,6 +154,21 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.commands.registerCommand("tiangzDeveloperTools.openUriLocation", openUriLocation),
     vscode.commands.registerCommand("tiangzDeveloperTools.showProjectSummary", () => showSummary(projects)),
     vscode.commands.registerCommand("tiangzDeveloperTools.showServerStats", showServerStats),
+    vscode.commands.registerCommand("tiangzDeveloperTools.runCodegen", (node?: ProjectNode | vscode.Uri) => runCommand(
+      () => runCodegen(node, undefined, projects, codegenTaskManager, refresh),
+    )),
+    vscode.commands.registerCommand("tiangzDeveloperTools.regenerateProto", (uri?: vscode.Uri) => runCommand(
+      () => runCodegen(uri, "proto", projects, codegenTaskManager, refresh),
+    )),
+    vscode.commands.registerCommand("tiangzDeveloperTools.regenerateNativeData", (uri?: vscode.Uri) => runCommand(
+      () => runCodegen(uri, "native-data", projects, codegenTaskManager, refresh),
+    )),
+    vscode.commands.registerCommand("tiangzDeveloperTools.regenerateScenes", () => runCommand(
+      () => runCodegen(undefined, "scenes", projects, codegenTaskManager, refresh),
+    )),
+    vscode.commands.registerCommand("tiangzDeveloperTools.regenerateClientHandlers", () => runCommand(
+      () => runCodegen(undefined, "client-handlers", projects, codegenTaskManager, refresh),
+    )),
     vscode.commands.registerCommand("tiangzDeveloperTools.runProcess", (node?: ProjectNode) => runCommand(
       () => launchProcess(node, projects, processManager, debugSessions, debugConfigStorage, "run"),
     )),
@@ -193,10 +215,67 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 }
 
 type SelectedProcess = { readonly project: IndexedProject; readonly process: ProcessConfigModel };
+type SelectedGenerator = { readonly project: IndexedProject; readonly generator: CodegenGeneratorModel };
 type CommandTarget = ProjectNode | vscode.Uri;
 interface ProcessQuickPickItem extends vscode.QuickPickItem {
   readonly project: IndexedProject;
   readonly process: ProcessConfigModel;
+}
+
+async function runCodegen(
+  target: ProjectNode | vscode.Uri | undefined,
+  generatorId: string | undefined,
+  projects: readonly IndexedProject[],
+  manager: CodegenTaskManager,
+  refresh: () => Promise<void>,
+): Promise<void> {
+  ensureTrustedWorkspace();
+  const selected = await selectGenerator(target, generatorId, projects);
+  if (!selected) return;
+  const exitCode = await manager.run(selected.project.folder, selected.generator);
+  if (exitCode !== 0) throw new Error(`${generatorLabel(selected.generator.id)}生成失败，退出码 ${exitCode}；请查看任务终端`);
+  await refresh();
+  void vscode.window.showInformationMessage(`TiangZ：${generatorLabel(selected.generator.id)}生成完成`);
+}
+
+async function selectGenerator(
+  target: ProjectNode | vscode.Uri | undefined,
+  generatorId: string | undefined,
+  projects: readonly IndexedProject[],
+): Promise<SelectedGenerator | undefined> {
+  let project: IndexedProject | undefined;
+  if (target && isProjectNode(target) && target.rootUri) {
+    project = projects.find((candidate) => candidate.folder.uri.toString() === target.rootUri);
+    if (project && !generatorId && target.generator) return { project, generator: target.generator };
+  } else if (target && isUri(target)) {
+    const folder = vscode.workspace.getWorkspaceFolder(target);
+    project = folder && projects.find((candidate) => candidate.folder.uri.toString() === folder.uri.toString());
+  }
+  if (!project) {
+    if (projects.length === 1) project = projects[0];
+    else {
+      const picked = await vscode.window.showQuickPick(
+        projects.map((candidate) => ({ label: candidate.folder.name, project: candidate })),
+        { placeHolder: "选择要执行代码生成的 TiangZ 工程" },
+      );
+      project = picked?.project;
+    }
+  }
+  if (!project) return undefined;
+  if (generatorId) {
+    const generator = project.snapshot.generators.find((candidate) => candidate.id === generatorId);
+    if (!generator) throw new Error(`工程 ${project.folder.name} 的 codegen.manifest.json 未定义生成器 ${generatorId}`);
+    return { project, generator };
+  }
+  const picked = await vscode.window.showQuickPick(
+    project.snapshot.generators.map((generator) => ({
+      label: generatorLabel(generator.id),
+      description: generator.command,
+      generator,
+    })),
+    { placeHolder: "选择要运行的代码生成器" },
+  );
+  return picked ? { project, generator: picked.generator } : undefined;
 }
 
 async function launchProcess(
@@ -417,7 +496,7 @@ function isProjectNode(value: CommandTarget | undefined): value is ProjectNode {
 }
 
 function ensureTrustedWorkspace(): void {
-  if (!vscode.workspace.isTrusted) throw new Error("启动或调试 TiangZ 前，请先信任当前工作区");
+  if (!vscode.workspace.isTrusted) throw new Error("执行 TiangZ 工程命令前，请先信任当前工作区");
 }
 
 async function runCommand(action: () => Promise<void>): Promise<void> {

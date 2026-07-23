@@ -106,6 +106,11 @@ export interface ProjectDiagnostic {
   readonly location: SourceLocation;
 }
 
+export interface CodegenGeneratorModel {
+  readonly id: string;
+  readonly command: string;
+}
+
 export interface TiangZProjectSnapshot {
   readonly environments: readonly string[];
   readonly processes: readonly ProcessConfigModel[];
@@ -115,5 +120,6 @@ export interface TiangZProjectSnapshot {
   readonly msgcodes: readonly MsgCodeModel[];
   readonly protocols: readonly ProtocolDescriptorModel[];
   readonly handlers: readonly HandlerModel[];
+  readonly generators: readonly CodegenGeneratorModel[];
   readonly diagnostics: readonly ProjectDiagnostic[];
 }

@@ -4,6 +4,7 @@ import ts from "typescript";
 
 import { validateTypeScriptDependencies } from "./dependencyRules.js";
 import { validateGeneratedIntegrity } from "./generatedIntegrity.js";
+import { readProjectGenerators } from "./projectFiles.js";
 
 import type {
   DeclarationKind,
@@ -45,6 +46,9 @@ export function analyzeTiangZProject(sources: readonly ProjectSource[]): TiangZP
   const protocols: ProtocolDescriptorModel[] = [];
   const handlers: HandlerModel[] = [];
   const diagnostics: ProjectDiagnostic[] = [];
+  const manifestText = sources.find(
+    (source) => normalizePath(source.relativePath) === "codegen.manifest.json",
+  )?.text;
 
   for (const source of [...sources].sort((left, right) => left.relativePath.localeCompare(right.relativePath, "en"))) {
     const relativePath = normalizePath(source.relativePath);
@@ -78,6 +82,7 @@ export function analyzeTiangZProject(sources: readonly ProjectSource[]): TiangZP
     msgcodes,
     protocols,
     handlers,
+    generators: readProjectGenerators(manifestText),
     diagnostics,
   };
 }

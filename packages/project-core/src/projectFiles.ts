@@ -1,3 +1,5 @@
+import type { CodegenGeneratorModel } from "./types.js";
+
 export interface ProjectFileTree {
   readonly root: string;
   readonly extensions: readonly string[];
@@ -18,12 +20,7 @@ export function createProjectFilePlan(manifestText?: string): ProjectFilePlan {
   ]);
   if (!manifestText) return freezePlan(exactPaths, trees);
 
-  let manifest: unknown;
-  try {
-    manifest = JSON.parse(manifestText);
-  } catch {
-    return freezePlan(exactPaths, trees);
-  }
+  const manifest = parseManifest(manifestText);
   if (!isRecord(manifest) || !isRecord(manifest.generators)) return freezePlan(exactPaths, trees);
 
   for (const generator of Object.values(manifest.generators)) {
@@ -44,6 +41,25 @@ export function createProjectFilePlan(manifestText?: string): ProjectFilePlan {
     }
   }
   return freezePlan(exactPaths, trees);
+}
+
+export function readProjectGenerators(manifestText?: string): readonly CodegenGeneratorModel[] {
+  const manifest = parseManifest(manifestText);
+  if (!isRecord(manifest) || !isRecord(manifest.generators)) return [];
+  return Object.entries(manifest.generators)
+    .flatMap(([id, value]) => isRecord(value) && typeof value.command === "string" && value.command.trim()
+      ? [{ id, command: value.command.trim() }]
+      : [])
+    .sort((left, right) => comparePath(left.id, right.id));
+}
+
+function parseManifest(manifestText?: string): unknown {
+  if (!manifestText) return undefined;
+  try {
+    return JSON.parse(manifestText);
+  } catch {
+    return undefined;
+  }
 }
 
 function addRecordKeys(target: Set<string>, value: unknown): void {

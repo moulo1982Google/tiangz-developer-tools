@@ -3,15 +3,17 @@
 ## 工程模型
 
 ```text
-configs/**/*.json -----> project-core -----> TiangZProjectSnapshot
-app/**/*.ts -----------/                         |
+configs/**/*.json ---------\
+app/**/*.ts ---------------> project-core -----> TiangZProjectSnapshot
+codegen.manifest.json -----/                         |
                                                  |-> 工程树
                                                  |-> Language Server
                                                  |    |-> Problems
                                                  |    |-> 定义/引用
                                                  |    |-> Hover/CodeLens
                                                  |    `-> Snapshot -> 工程树
-                                                 |-> CLI/CI（后续）
+                                                 |-> CLI/CI
+                                                 `-> Codegen Task
 ```
 
 `project-core` 使用 TypeScript Compiler API 读取装饰器和类声明，不使用正则解释 TypeScript。它不读取文件系统、不依赖 VS Code，也不启动 TiangZ 进程。
@@ -27,6 +29,8 @@ app/**/*.ts -----------/                         |
 工程依赖规则由 project-core 基于 TypeScript AST 检查，`Generated/Model` 与负责装配业务的 `Generated/Hotfix` 使用不同边界。完整矩阵见[工程依赖规则](dependency-rules.md)。
 
 Generated 完整性由根目录 `codegen.manifest.json` 描述。Language Server 比对内容输入、文件集合与输出哈希，不启动生成器。详见[Generated 完整性检查](generated-integrity.md)。
+
+代码生成命令同样来自 Manifest。扩展只负责把所选命令放入独立 VS Code Task，不在插件内维护另一份 npm script 映射。详见[定向代码生成](codegen-actions.md)。
 
 ## 性能边界
 

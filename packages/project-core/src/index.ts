@@ -1,9 +1,10 @@
 export { analyzeTiangZProject } from "./projectAnalyzer.js";
-export { createProjectFilePlan } from "./projectFiles.js";
+export { createProjectFilePlan, readProjectGenerators } from "./projectFiles.js";
 export { createDebugConfig, resolveMachineProcessPaths } from "./launch.js";
 export type { DebugConfigOverride, GeneratedDebugConfig } from "./launch.js";
 export type { ProjectFilePlan, ProjectFileTree } from "./projectFiles.js";
 export type {
+  CodegenGeneratorModel,
   DeclarationKind,
   HandlerKind,
   HandlerModel,
