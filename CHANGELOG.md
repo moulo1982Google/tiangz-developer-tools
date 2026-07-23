@@ -1,5 +1,12 @@
 # 更新记录
 
+## 0.6.0
+
+- 增加可在本地和 CI 运行的 `tiangz-check-project` 命令。
+- 支持中文文本与 JSON 输出、警告升级为错误以及稳定退出码。
+- 将 Manifest 文件发现规则下沉到 project-core，Language Server 与 CLI 共用同一实现。
+- 使用真实 TiangZ 工程完成零诊断验收。
+
 ## 0.5.0
 
 - 读取 `codegen.manifest.json`，检查内容输入、Scene/Handler 文件集合与生成输出。

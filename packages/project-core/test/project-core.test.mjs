@@ -4,9 +4,36 @@ import test from "node:test";
 
 import {
   analyzeTiangZProject,
+  createProjectFilePlan,
   createDebugConfig,
   resolveMachineProcessPaths,
 } from "../dist/index.js";
+
+test("creates one file discovery plan from the generated manifest", () => {
+  const plan = createProjectFilePlan(JSON.stringify({
+    version: 1,
+    hashAlgorithm: "sha256-normalized-text-v1",
+    generators: {
+      native: {
+        contentInputs: { "native_data/Entity.native": "hash" },
+        outputs: { "src/generated/native/entity.rs": "hash" },
+        selections: [{ kind: "handler", roots: ["app/demo"], paths: [] }],
+        outputRoots: [{ path: "src/generated/native", extensions: [".rs"] }],
+      },
+    },
+  }));
+  assert.deepEqual(plan.exactPaths, [
+    "codegen.manifest.json",
+    "native_data/Entity.native",
+    "src/generated/native/entity.rs",
+  ]);
+  assert.deepEqual(plan.trees, [
+    { root: "app", extensions: [".ts"] },
+    { root: "app/demo", extensions: [".ts"] },
+    { root: "configs", extensions: [".json"] },
+    { root: "src/generated/native", extensions: [".rs"] },
+  ]);
+});
 
 const sources = [
   {

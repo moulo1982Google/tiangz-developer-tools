@@ -1,5 +1,6 @@
 import * as vscode from "vscode";
 
+import { createProjectFilePlan } from "../../packages/project-core/src/projectFiles.js";
 import type { TiangZProjectSnapshot } from "../../packages/project-core/src/types.js";
 
 const EXCLUDE = "**/{node_modules,.git,target,dist,out,temp,library}/**";
@@ -50,38 +51,20 @@ export async function discoverWorkspaceFolder(folder: vscode.WorkspaceFolder): P
 
   async function collectManifestFiles(): Promise<void> {
     const manifestUri = vscode.Uri.joinPath(folder.uri, "codegen.manifest.json");
-    let manifest: unknown;
+    let manifestText: string | undefined;
     try {
       const content = await vscode.workspace.fs.readFile(manifestUri);
-      manifest = JSON.parse(new TextDecoder().decode(content));
+      manifestText = new TextDecoder().decode(content);
       addUri(manifestUri);
     } catch (error) {
       if (isFileNotFound(error)) return;
       addUri(manifestUri);
       return;
     }
-    if (!isRecord(manifest) || !isRecord(manifest.generators)) return;
-    for (const generator of Object.values(manifest.generators)) {
-      if (!isRecord(generator)) continue;
-      for (const file of [...recordKeys(generator.contentInputs), ...recordKeys(generator.outputs)]) {
-        await addExisting(file);
-      }
-      if (Array.isArray(generator.selections)) {
-        for (const selection of generator.selections) {
-          if (!isRecord(selection) || !Array.isArray(selection.roots)) continue;
-          for (const root of selection.roots.filter((value): value is string => typeof value === "string")) {
-            await collect(`${normalizeRoot(root)}/**/*.ts`);
-          }
-        }
-      }
-      if (Array.isArray(generator.outputRoots)) {
-        for (const outputRoot of generator.outputRoots) {
-          if (!isRecord(outputRoot) || typeof outputRoot.path !== "string" || !Array.isArray(outputRoot.extensions)) continue;
-          for (const extension of outputRoot.extensions.filter((value): value is string => typeof value === "string")) {
-            await collect(`${normalizeRoot(outputRoot.path)}/**/*${extension}`);
-          }
-        }
-      }
+    const plan = createProjectFilePlan(manifestText);
+    for (const file of plan.exactPaths) await addExisting(file);
+    for (const tree of plan.trees) {
+      for (const extension of tree.extensions) await collect(`${tree.root}/**/*${extension}`);
     }
   }
 
@@ -106,10 +89,6 @@ export async function discoverWorkspaceFolder(folder: vscode.WorkspaceFolder): P
 
 function normalizeRoot(value: string): string {
   return value.trim().replaceAll("\\", "/").replace(/^\.\//, "").replace(/\/$/, "");
-}
-
-function recordKeys(value: unknown): string[] {
-  return isRecord(value) ? Object.keys(value) : [];
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
