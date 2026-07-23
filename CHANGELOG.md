@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.2
+
+- 移除 Windows 下无法稳定命中的资源管理器 `resourcePath` 正则条件，由命令执行阶段校验配置归属。
+
 ## 0.3.1
 
 - 在 VS Code 原生资源管理器的 TiangZ 配置文件右键菜单中提供 Process 和 Machine 启停、调试命令。
