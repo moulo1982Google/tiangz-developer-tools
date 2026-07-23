@@ -22,7 +22,9 @@ app/**/*.ts -----------/                         |
 - 类型：EntryScene、动态 Scene、Actor、Component。
 - 协议：服务端生成的 RPC、Message、Request、Response、MsgCode 与 Descriptor。
 - Handler：`rpcHandler`、`messageHandler`、`actorRpcHandler`、`actorMessageHandler`、`rpc`、`message`、`handler` 和 `registerActorRpc`。
-- 诊断：配置错误、重复入口 Scene、重复或缺失 Handler、RPC 类型不匹配、JSON/TypeScript 语法错误。
+- 诊断：配置错误、重复入口 Scene、重复或缺失 Handler、RPC 类型不匹配、工程依赖方向、JSON/TypeScript 语法错误。
+
+工程依赖规则由 project-core 基于 TypeScript AST 检查，`Generated/Model` 与负责装配业务的 `Generated/Hotfix` 使用不同边界。完整矩阵见[工程依赖规则](dependency-rules.md)。
 
 ## 性能边界
 

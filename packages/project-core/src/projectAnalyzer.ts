@@ -2,6 +2,8 @@ import path from "node:path";
 
 import ts from "typescript";
 
+import { validateTypeScriptDependencies } from "./dependencyRules.js";
+
 import type {
   DeclarationKind,
   HandlerKind,
@@ -164,6 +166,7 @@ function analyzeTypeScript(
     });
   }
   analyzeGeneratedProtocol(sourceFile, source.relativePath, messageTypes, msgcodes, protocols);
+  validateTypeScriptDependencies(sourceFile, source.relativePath, diagnostics);
   visit(sourceFile);
 
   function visit(node: ts.Node): void {

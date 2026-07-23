@@ -1,6 +1,6 @@
 {
   "name": "@tiangz/developer-tools-core",
-  "version": "0.3.3",
+  "version": "0.4.0",
   "description": "TiangZ 工程模型、静态索引与 VS Code 开发工具",
   "author": "moulo",
   "license": "MIT",

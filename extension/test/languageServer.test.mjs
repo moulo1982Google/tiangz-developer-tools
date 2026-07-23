@@ -115,6 +115,19 @@ class BrokenLoginHandler implements SceneRpcHandler<LoginScene, WrongRequest, S2
       "tiangz.handler.duplicate",
     ]);
 
+    const invalidCoreUri = `${rootUri}/app/core/InvalidRuntime.ts`;
+    const dependencyDiagnostics = rpc.waitForNotification(
+      "textDocument/publishDiagnostics",
+      (params) => params.uri === invalidCoreUri
+        && params.diagnostics.some((diagnostic) => diagnostic.code === "tiangz.architecture.invalid-dependency"),
+    );
+    open(rpc, invalidCoreUri, `import { LoginHandler } from "../demo/LoginHandler";`, 1);
+    const invalidDependency = (await dependencyDiagnostics).diagnostics.find(
+      (diagnostic) => diagnostic.code === "tiangz.architecture.invalid-dependency",
+    );
+    assert.equal(invalidDependency.severity, 1);
+    assert.match(invalidDependency.message, /Core 不允许依赖 业务目录 demo/);
+
     await rpc.request("shutdown", null);
     rpc.notify("exit", null);
     await rpc.waitForExit();

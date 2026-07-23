@@ -1,4 +1,10 @@
-# Changelog
+# 更新记录
+
+## 0.4.0
+
+- 使用 TypeScript AST 检查 Core、Generated/Model、Model、Hotfix、Game 和业务目录的依赖方向。
+- 区分纯生成模型与负责 Scene/Handler 装配的 Generated/Hotfix 入口。
+- 违规依赖以 Error 级别发布到 VS Code Problems，并指向具体模块路径。
 
 ## 0.3.3
 

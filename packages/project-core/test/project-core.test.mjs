@@ -293,3 +293,63 @@ test("indexes registerActorRpc as an explicit routed Handler", () => {
   assert.equal(snapshot.handlers[0].descriptor, "LoginProtocol.Login");
   assert.deepEqual(snapshot.diagnostics, []);
 });
+
+test("enforces framework, generated and business dependency directions", () => {
+  const snapshot = analyzeTiangZProject([
+    {
+      relativePath: "app/core/Runtime.ts",
+      text: `import { LoginScene } from "../demo/LoginScene";`,
+    },
+    {
+      relativePath: "app/generated/model/server/messages.ts",
+      text: `export { LoginScene } from "../../../demo/LoginScene";`,
+    },
+    {
+      relativePath: "app/model/Player.ts",
+      text: `const handler = import("../hotfix/PlayerHandler");`,
+    },
+    {
+      relativePath: "app/demo/LoginScene.ts",
+      text: `import { BenchScene } from "../bench/BenchScene";`,
+    },
+  ]);
+  assert.deepEqual(snapshot.diagnostics.map((diagnostic) => diagnostic.code), [
+    "tiangz.architecture.invalid-dependency",
+    "tiangz.architecture.invalid-dependency",
+    "tiangz.architecture.invalid-dependency",
+    "tiangz.architecture.invalid-dependency",
+  ]);
+  assert.ok(snapshot.diagnostics.every((diagnostic) => diagnostic.severity === "error"));
+});
+
+test("allows model, hotfix, business and generated composition dependencies", () => {
+  const snapshot = analyzeTiangZProject([
+    {
+      relativePath: "app/model/Player.ts",
+      text: `import { Entity } from "../core/runtime";
+import { NativeUnitRef } from "../generated/model/native/NativeUnitRef";`,
+    },
+    {
+      relativePath: "app/hotfix/PlayerHandler.ts",
+      text: `import { Player } from "../model/Player";
+import { GameErrCode } from "../game/protocol/GameErrCode";`,
+    },
+    {
+      relativePath: "app/demo/LoginScene.ts",
+      text: `import { Entity } from "../core/runtime";
+import { LoginProtocol } from "../generated/model/server/demo/protocol/rpcs";
+import { GameErrCode } from "../game/protocol/GameErrCode";`,
+    },
+    {
+      relativePath: "app/generated/hotfix/scenes.ts",
+      text: `import "../../demo/LoginScene";
+import "../../hotfix/PlayerHandler";`,
+    },
+    {
+      relativePath: "app/main.ts",
+      text: `import "./generated/hotfix/scenes";
+import "./demo/LoginScene";`,
+    },
+  ]);
+  assert.deepEqual(snapshot.diagnostics, []);
+});

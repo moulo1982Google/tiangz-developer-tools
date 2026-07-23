@@ -27,7 +27,7 @@
 
 ## Phase 3：工程规则
 
-- [ ] 检查 Core、Generated、Model、Hotfix 和 Demo 依赖方向
+- [x] 检查 Core、Generated、Model、Hotfix 和 Demo 依赖方向
 - [ ] 检测 Generated 文件过期或被手工修改
 - [ ] 提供可在 CI 运行的 `check:project` CLI
 - [ ] 与 proto、scene、client handler 和 native codegen 状态联动
