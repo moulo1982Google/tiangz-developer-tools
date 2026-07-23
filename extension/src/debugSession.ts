@@ -52,17 +52,16 @@ export async function attachDebugger(
   const timeoutMs = configuration.get<number>("inspectorConnectTimeoutMs", 15_000);
   const address = inspectorConnectAddress(debug.inspectorIp);
   await waitForInspector(address, debug.inspectorPort, timeoutMs);
-  const workspacePath = folder.uri.fsPath.replaceAll("\\", "/");
+  const workspacePath = folder.uri.fsPath;
   return vscode.debug.startDebugging(folder, {
     type: "node",
     request: "attach",
     name: `TiangZ：${process.name}`,
     address,
     port: debug.inspectorPort,
+    cwd: workspacePath,
     sourceMaps: true,
-    sourceMapPathOverrides: {
-      "*": `${workspacePath}/*`,
-    },
+    outFiles: [path.join(workspacePath, "dist", "**", "*.js")],
     __tiangzProcessKey: processKey,
   });
 }

@@ -29,7 +29,7 @@ npm run check
 npm run package:extension
 ```
 
-生成的 VSIX 位于 `dist/tiangz-developer-tools-0.3.2.vsix`。
+生成的 VSIX 位于 `dist/tiangz-developer-tools-0.3.3.vsix`。
 
 ## 配置
 

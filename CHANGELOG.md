@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.3
+
+- 修复错误的全局 sourcemap 路径覆盖导致 TypeScript 断点无法绑定的问题。
+- 调试会话明确使用工程目录与 `dist/**/*.js` 输出范围。
+
 ## 0.3.2
 
 - 移除 Windows 下无法稳定命中的资源管理器 `resourcePath` 正则条件，由命令执行阶段校验配置归属。
