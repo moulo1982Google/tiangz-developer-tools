@@ -2,7 +2,7 @@
   "name": "tiangz-developer-tools",
   "displayName": "TiangZ Developer Tools",
   "description": "TiangZ Process、Scene、协议导航、运行与 TypeScript 调试工具",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "publisher": "moulo",
   "author": "moulo",
   "license": "MIT",
@@ -49,7 +49,7 @@
     "build": "node ../tools/build-extension.mjs",
     "check:package": "vsce ls --no-dependencies",
     "prepackage": "node -e \"require('node:fs').mkdirSync('../dist', { recursive: true })\"",
-    "package": "npm run build && vsce package --no-dependencies --out ../dist/tiangz-developer-tools-0.3.0.vsix"
+    "package": "npm run build && vsce package --no-dependencies --out ../dist/tiangz-developer-tools-0.3.1.vsix"
   },
   "devDependencies": {
     "@types/vscode": "^1.91.0",
@@ -206,6 +206,38 @@
         {
           "command": "tiangzDeveloperTools.stopMachine",
           "when": "view == tiangzProject && viewItem == tiangzMachineConfig",
+          "group": "tiangzRun@2"
+        }
+      ],
+      "explorer/context": [
+        {
+          "command": "tiangzDeveloperTools.runProcess",
+          "when": "resourceExtname == .json && resourcePath =~ /\\/configs\\// && resourceFilename != StartMachine.json",
+          "group": "tiangzRun@1"
+        },
+        {
+          "command": "tiangzDeveloperTools.debugProcess",
+          "when": "resourceExtname == .json && resourcePath =~ /\\/configs\\// && resourceFilename != StartMachine.json",
+          "group": "tiangzRun@2"
+        },
+        {
+          "command": "tiangzDeveloperTools.stopProcess",
+          "when": "resourceExtname == .json && resourcePath =~ /\\/configs\\// && resourceFilename != StartMachine.json",
+          "group": "tiangzRun@3"
+        },
+        {
+          "command": "tiangzDeveloperTools.restartProcess",
+          "when": "resourceExtname == .json && resourcePath =~ /\\/configs\\// && resourceFilename != StartMachine.json",
+          "group": "tiangzRun@4"
+        },
+        {
+          "command": "tiangzDeveloperTools.runMachine",
+          "when": "resourceFilename == StartMachine.json && resourcePath =~ /\\/configs\\//",
+          "group": "tiangzRun@1"
+        },
+        {
+          "command": "tiangzDeveloperTools.stopMachine",
+          "when": "resourceFilename == StartMachine.json && resourcePath =~ /\\/configs\\//",
           "group": "tiangzRun@2"
         }
       ]

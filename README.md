@@ -15,7 +15,7 @@ TiangZ 框架的工程模型、静态检查与 VS Code 开发工具。
 - 检查配置引用、重复或缺失 Handler，以及 RPC 消息类型不匹配。
 - 将工程问题同时显示在工程树与 VS Code Problems 面板。
 - 独立 Language Server 使用 150ms 防抖，不保留 TypeScript AST，并提供运行状态指标。
-- 从工程树或命令面板运行、调试、停止和重启单个 Process。
+- 从工程树、原生资源管理器或命令面板运行、调试、停止和重启单个 Process。
 - 将 StartMachine 的 Process 展开为独立 VS Code Task，可分别查看 PID、日志和状态。
 - 自动执行 TypeScript/Cargo 构建，直接运行 Cargo 产出的 TiangZ executable。
 - 自动等待 V8 Inspector 并附加 VS Code JavaScript Debugger，无需维护 `launch.json`。
@@ -29,7 +29,7 @@ npm run check
 npm run package:extension
 ```
 
-生成的 VSIX 位于 `dist/tiangz-developer-tools-0.3.0.vsix`。
+生成的 VSIX 位于 `dist/tiangz-developer-tools-0.3.1.vsix`。
 
 ## 配置
 
@@ -50,7 +50,7 @@ npm run package:extension
 
 ## 运行与调试
 
-在“TiangZ 工程”树中右键 Process：
+在“TiangZ 工程”树中右键 Process，或在原生资源管理器中右键 `configs/**/*.json`：
 
 - “运行 Process”：普通构建后启动独立 Task。
 - “调试 Process”：构建 debug bundle、启动 Process、等待 Inspector 并自动附加。

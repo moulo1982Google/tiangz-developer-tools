@@ -185,13 +185,14 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 }
 
 type SelectedProcess = { readonly project: IndexedProject; readonly process: ProcessConfigModel };
+type CommandTarget = ProjectNode | vscode.Uri;
 interface ProcessQuickPickItem extends vscode.QuickPickItem {
   readonly project: IndexedProject;
   readonly process: ProcessConfigModel;
 }
 
 async function launchProcess(
-  node: ProjectNode | undefined,
+  target: CommandTarget | undefined,
   projects: readonly IndexedProject[],
   manager: TiangZProcessManager,
   debugSessions: ReadonlyMap<string, vscode.DebugSession>,
@@ -199,7 +200,7 @@ async function launchProcess(
   mode: "run" | "debug",
 ): Promise<void> {
   ensureTrustedWorkspace();
-  const selected = await selectProcess(node, projects);
+  const selected = await selectProcess(target, projects);
   if (!selected) return;
   const { project, process } = selected;
   if (mode === "run") {
@@ -233,13 +234,13 @@ async function launchProcess(
 }
 
 async function attachProcess(
-  node: ProjectNode | undefined,
+  target: CommandTarget | undefined,
   projects: readonly IndexedProject[],
   manager: TiangZProcessManager,
   debugSessions: ReadonlyMap<string, vscode.DebugSession>,
 ): Promise<void> {
   ensureTrustedWorkspace();
-  const selected = await selectProcess(node, projects);
+  const selected = await selectProcess(target, projects);
   if (!selected) return;
   const status = manager.getStatus(selected.project.folder.uri.toString(), selected.process.relativePath);
   if (!status || status.state !== "running") throw new Error(`${selected.process.name} 当前没有运行`);
@@ -253,22 +254,22 @@ async function attachProcess(
 }
 
 async function stopProcess(
-  node: ProjectNode | undefined,
+  target: CommandTarget | undefined,
   projects: readonly IndexedProject[],
   manager: TiangZProcessManager,
 ): Promise<void> {
-  const selected = await selectProcess(node, projects, true, manager);
+  const selected = await selectProcess(target, projects, true, manager);
   if (!selected) return;
   await manager.stop(selected.project.folder.uri.toString(), selected.process.relativePath);
 }
 
 async function launchMachine(
-  node: ProjectNode | undefined,
+  target: CommandTarget | undefined,
   projects: readonly IndexedProject[],
   manager: TiangZProcessManager,
 ): Promise<void> {
   ensureTrustedWorkspace();
-  const selected = await selectMachine(node, projects);
+  const selected = await selectMachine(target, projects);
   if (!selected) return;
   const processPaths = new Set(resolveMachineProcessPaths(selected.machine));
   const processes = selected.project.snapshot.processes.filter((process) => processPaths.has(process.relativePath));
@@ -285,24 +286,24 @@ async function launchMachine(
 }
 
 async function stopMachine(
-  node: ProjectNode | undefined,
+  target: CommandTarget | undefined,
   projects: readonly IndexedProject[],
   manager: TiangZProcessManager,
 ): Promise<void> {
-  const selected = await selectMachine(node, projects);
+  const selected = await selectMachine(target, projects);
   if (!selected) return;
   const processPaths = resolveMachineProcessPaths(selected.machine);
   await Promise.all(processPaths.map((relativePath) => manager.stop(selected.project.folder.uri.toString(), relativePath)));
 }
 
 async function restartProcess(
-  node: ProjectNode | undefined,
+  target: CommandTarget | undefined,
   projects: readonly IndexedProject[],
   manager: TiangZProcessManager,
   debugSessions: ReadonlyMap<string, vscode.DebugSession>,
   debugConfigStorage: vscode.Uri,
 ): Promise<void> {
-  const selected = await selectProcess(node, projects);
+  const selected = await selectProcess(target, projects);
   if (!selected) return;
   const rootUri = selected.project.folder.uri.toString();
   const status = manager.getStatus(rootUri, selected.process.relativePath);
@@ -328,14 +329,22 @@ async function restartProcess(
 }
 
 async function selectProcess(
-  node: ProjectNode | undefined,
+  target: CommandTarget | undefined,
   projects: readonly IndexedProject[],
   runningOnly = false,
   manager?: TiangZProcessManager,
 ): Promise<SelectedProcess | undefined> {
-  if (node?.process && node.rootUri) {
-    const project = projects.find((candidate) => candidate.folder.uri.toString() === node.rootUri);
-    if (project) return { project, process: node.process };
+  if (isProjectNode(target) && target.process && target.rootUri) {
+    const project = projects.find((candidate) => candidate.folder.uri.toString() === target.rootUri);
+    if (project) return { project, process: target.process };
+  }
+  if (isUri(target)) {
+    const located = locateConfig(target, projects);
+    const process = located?.project.snapshot.processes.find(
+      (candidate) => candidate.relativePath === located.relativePath,
+    );
+    if (located && process) return { project: located.project, process };
+    throw new Error(`${vscode.workspace.asRelativePath(target, false)} 不是 TiangZ Process 配置`);
   }
   const choices: ProcessQuickPickItem[] = projects.flatMap((project) => project.snapshot.processes.flatMap((process) => {
     const status = manager?.getStatus(project.folder.uri.toString(), process.relativePath);
@@ -354,10 +363,18 @@ async function selectProcess(
   return selected ? { project: selected.project, process: selected.process } : undefined;
 }
 
-async function selectMachine(node: ProjectNode | undefined, projects: readonly IndexedProject[]) {
-  if (node?.machine && node.rootUri) {
-    const project = projects.find((candidate) => candidate.folder.uri.toString() === node.rootUri);
-    if (project) return { project, machine: node.machine };
+async function selectMachine(target: CommandTarget | undefined, projects: readonly IndexedProject[]) {
+  if (isProjectNode(target) && target.machine && target.rootUri) {
+    const project = projects.find((candidate) => candidate.folder.uri.toString() === target.rootUri);
+    if (project) return { project, machine: target.machine };
+  }
+  if (isUri(target)) {
+    const located = locateConfig(target, projects);
+    const machine = located?.project.snapshot.machines.find(
+      (candidate) => candidate.relativePath === located.relativePath,
+    );
+    if (located && machine) return { project: located.project, machine };
+    throw new Error(`${vscode.workspace.asRelativePath(target, false)} 不是 TiangZ StartMachine 配置`);
   }
   const choices = projects.flatMap((project) => project.snapshot.machines.map((machine) => ({
     label: machine.name,
@@ -366,6 +383,29 @@ async function selectMachine(node: ProjectNode | undefined, projects: readonly I
     machine,
   })));
   return vscode.window.showQuickPick(choices, { placeHolder: "选择要启动的 StartMachine 机器配置" });
+}
+
+function locateConfig(
+  uri: vscode.Uri,
+  projects: readonly IndexedProject[],
+): { readonly project: IndexedProject; readonly relativePath: string } | undefined {
+  const folder = vscode.workspace.getWorkspaceFolder(uri);
+  if (!folder) return undefined;
+  const project = projects.find((candidate) => candidate.folder.uri.toString() === folder.uri.toString());
+  if (!project) return undefined;
+  const relativePath = path.relative(folder.uri.fsPath, uri.fsPath).replaceAll("\\", "/");
+  return { project, relativePath };
+}
+
+function isUri(value: CommandTarget | undefined): value is vscode.Uri {
+  return value !== undefined
+    && "scheme" in value
+    && "fsPath" in value
+    && "path" in value;
+}
+
+function isProjectNode(value: CommandTarget | undefined): value is ProjectNode {
+  return value !== undefined && !isUri(value);
 }
 
 function ensureTrustedWorkspace(): void {

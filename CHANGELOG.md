@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.1
+
+- 在 VS Code 原生资源管理器的 TiangZ 配置文件右键菜单中提供 Process 和 Machine 启停、调试命令。
+- 右键命令直接定位所选配置文件，不再退回到全局 Process 选择列表。
+
 ## 0.3.0
 
 - 增加单 Process 运行、调试、附加、停止和重启命令。

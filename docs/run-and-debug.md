@@ -2,7 +2,7 @@
 
 ## 单 Process
 
-在资源管理器的“TiangZ 工程”树中找到 Process，右键选择：
+在资源管理器的“TiangZ 工程”树中找到 Process，或者直接右键原生文件树中的 `configs/**/*.json`，可以选择：
 
 - “运行 Process”执行普通 TypeScript 构建和 Cargo 构建，然后启动服务器。
 - “调试 Process”执行带内联 sourcemap 的构建，启动服务器并自动附加 V8 Inspector。
@@ -36,7 +36,7 @@
 
 ## Machine 进程组
 
-右键 StartMachine 下的 Machine，选择“启动 Machine 进程组”。插件读取该 Machine 的 `processes`，构建一次，然后为每个 Process 创建独立 Task。
+右键 StartMachine 下的 Machine，或直接右键原生文件树中的 `StartMachine.json`，选择“启动 Machine 进程组”。插件读取该 Machine 的 `processes`，构建一次，然后为每个 Process 创建独立 Task。
 
 这与把 `StartMachine.json` 交给 Watcher 的业务结果相同，但保留了每个 Process 的 PID、Terminal、停止和重启能力。“停止 Machine 进程组”只停止该 Machine 引用且由插件管理的 Process。
 
