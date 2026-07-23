@@ -3,6 +3,7 @@ import * as vscode from "vscode";
 import type {
   HandlerModel,
   ProjectDiagnostic,
+  ProtocolDescriptorModel,
   SourceLocation,
   TiangZProjectSnapshot,
   TypeDeclarationModel,
@@ -65,6 +66,7 @@ function projectNode(project: IndexedProject, showFolder: boolean): ProjectNode 
     declarationsNode("动态 Scene", "symbol-namespace", "scene", snapshot),
     declarationsNode("Actor", "symbol-class", "actor", snapshot),
     declarationsNode("Component", "extensions", "component", snapshot),
+    protocolsNode(snapshot),
     handlersNode(snapshot.handlers),
     diagnosticsNode(snapshot.diagnostics),
   ];
@@ -73,6 +75,44 @@ function projectNode(project: IndexedProject, showFolder: boolean): ProjectNode 
     description: `${snapshot.processes.length} Process / ${snapshot.handlers.length} Handler`,
     icon: "project",
     children: categories,
+  };
+}
+
+function protocolsNode(snapshot: TiangZProjectSnapshot): ProjectNode {
+  return {
+    label: "协议",
+    description: String(snapshot.protocols.length),
+    icon: "symbol-interface",
+    children: snapshot.protocols.map((protocol) => protocolNode(protocol, snapshot.handlers)),
+  };
+}
+
+function protocolNode(protocol: ProtocolDescriptorModel, handlers: readonly HandlerModel[]): ProjectNode {
+  const linked = handlers.filter((handler) => handler.kind !== "actorMethod"
+    && normalizeDescriptorReference(handler.descriptor) === protocol.symbol);
+  const code = protocol.kind === "rpc"
+    ? `${protocol.requestCode ?? "?"} -> ${protocol.responseCode ?? "?"}`
+    : String(protocol.msgcode ?? "?");
+  return {
+    label: protocol.name,
+    description: `${code} / ${linked.length} Handler`,
+    tooltip: [
+      protocol.kind === "rpc" ? "RPC" : "Message",
+      `Descriptor：${protocol.symbol}`,
+      protocol.requestType ? `Request：${protocol.requestType}` : undefined,
+      protocol.responseType ? `Response：${protocol.responseType}` : undefined,
+      protocol.messageType ? `消息：${protocol.messageType}` : undefined,
+      protocol.routing ? `路由：${protocol.routing}` : undefined,
+    ].filter(Boolean).join("\n"),
+    icon: protocol.kind === "rpc" ? "symbol-method" : "symbol-event",
+    location: protocol.location,
+    children: linked.map((handler) => ({
+      label: handler.name,
+      description: handler.target,
+      icon: "references",
+      location: handler.location,
+      children: [],
+    })),
   };
 }
 
@@ -175,4 +215,8 @@ function declarationTooltip(declaration: TypeDeclarationModel): string {
     declaration.mailbox ? `Mailbox：${declaration.mailbox}` : undefined,
     declaration.location.relativePath,
   ].filter(Boolean).join("\n");
+}
+
+function normalizeDescriptorReference(value: string): string {
+  return value.endsWith(".name") ? value.slice(0, -".name".length) : value;
 }

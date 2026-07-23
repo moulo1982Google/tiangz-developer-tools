@@ -4,15 +4,17 @@ TiangZ 框架的工程模型、静态检查与 VS Code 开发工具。
 
 这个插件不替代 TypeScript，也不负责 `.native` 语言支持。它关注 TiangZ 特有的 Process、Scene、Actor、Component、Handler 和启动配置之间的关系。
 
-## v0.1.0 能力
+## v0.2.0 能力
 
 - 扫描 `configs/<环境>/**/*.json`，建立 Environment、Machine、Process 和入口 Scene 模型。
 - 使用 TypeScript Compiler API 识别 `@entryScene`、`@scene`、`@actor` 和 `@component`。
-- 识别类 Handler 与 `@rpc`、`@handler` 方法 Handler。
+- 从服务端生成文件索引 RPC、Message、Request、Response、MsgCode 与 Descriptor。
+- 识别类 Handler、`@rpc`、`@message`、`@handler` 方法和 `registerActorRpc` 显式注册。
 - 在资源管理器中显示“TiangZ 工程”树，并可跳转到配置或声明。
-- 检查配置引用的入口 Scene 和 StartMachine 引用的进程配置。
+- 在 Handler 与协议之间双向导航，并提供中文 Hover 和 CodeLens。
+- 检查配置引用、重复或缺失 Handler，以及 RPC 消息类型不匹配。
 - 将工程问题同时显示在工程树与 VS Code Problems 面板。
-- 文件修改后防抖刷新，也可以手动执行“TiangZ：刷新工程索引”。
+- 独立 Language Server 使用 150ms 防抖，不保留 TypeScript AST，并提供运行状态指标。
 
 ## 本地开发
 
@@ -22,7 +24,7 @@ npm run check
 npm run package:extension
 ```
 
-生成的 VSIX 位于 `dist/tiangz-developer-tools-0.1.0.vsix`。
+生成的 VSIX 位于 `dist/tiangz-developer-tools-0.2.0.vsix`。
 
 ## 配置
 
@@ -31,13 +33,15 @@ npm run package:extension
 ```json
 {
   "tiangzDeveloperTools.configRoot": "configs",
-  "tiangzDeveloperTools.sourceRoots": ["app"]
+  "tiangzDeveloperTools.sourceRoots": ["app"],
+  "tiangzDeveloperTools.initialFileLimit": 10000,
+  "tiangzDeveloperTools.maxFileSizeBytes": 2097152
 }
 ```
 
 ## 工程边界
 
-`packages/project-core` 不依赖 VS Code，只接收相对路径和文件文本。扩展负责文件发现、TreeView、Problems 和编辑器跳转。
+`packages/project-core` 不依赖 VS Code，只接收相对路径和文件文本。VS Code 扩展负责文件发现和工程树；独立 Language Server 负责 Problems、协议导航、Hover 与 CodeLens。
 
 当前版本刻意不包含启动、Debug 和运行时 Inspector。这些能力将在静态工程模型稳定后逐步加入，避免插件一开始就同时承担索引器、进程管理器和调试器。
 

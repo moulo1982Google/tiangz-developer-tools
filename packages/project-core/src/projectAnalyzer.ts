@@ -6,10 +6,13 @@ import type {
   DeclarationKind,
   HandlerKind,
   HandlerModel,
+  MessageTypeModel,
+  MsgCodeModel,
   MachineConfigModel,
   ProcessConfigModel,
   ProjectDiagnostic,
   ProjectSource,
+  ProtocolDescriptorModel,
   SceneConfigModel,
   SourceLocation,
   TiangZProjectSnapshot,
@@ -34,19 +37,31 @@ export function analyzeTiangZProject(sources: readonly ProjectSource[]): TiangZP
   const processes: ProcessConfigModel[] = [];
   const machines: MachineConfigModel[] = [];
   const declarations: TypeDeclarationModel[] = [];
+  const messageTypes: MessageTypeModel[] = [];
+  const msgcodes: MsgCodeModel[] = [];
+  const protocols: ProtocolDescriptorModel[] = [];
   const handlers: HandlerModel[] = [];
   const diagnostics: ProjectDiagnostic[] = [];
 
   for (const source of [...sources].sort((left, right) => left.relativePath.localeCompare(right.relativePath, "en"))) {
     const relativePath = normalizePath(source.relativePath);
     if (relativePath.endsWith(".ts")) {
-      analyzeTypeScript({ ...source, relativePath }, declarations, handlers, diagnostics);
+      analyzeTypeScript(
+        { ...source, relativePath },
+        declarations,
+        messageTypes,
+        msgcodes,
+        protocols,
+        handlers,
+        diagnostics,
+      );
     } else if (relativePath.startsWith("configs/") && relativePath.endsWith(".json")) {
       analyzeConfig({ ...source, relativePath }, processes, machines, diagnostics);
     }
   }
 
-  validateProject(processes, machines, declarations, diagnostics);
+  resolveProtocolCodes(protocols, msgcodes);
+  validateProject(processes, machines, declarations, protocols, handlers, diagnostics);
   return {
     environments: [...new Set([
       ...processes.map((process) => process.environment),
@@ -55,6 +70,9 @@ export function analyzeTiangZProject(sources: readonly ProjectSource[]): TiangZP
     processes,
     machines,
     declarations,
+    messageTypes,
+    msgcodes,
+    protocols,
     handlers,
     diagnostics,
   };
@@ -108,6 +126,9 @@ function analyzeConfig(
 function analyzeTypeScript(
   source: ProjectSource,
   declarations: TypeDeclarationModel[],
+  messageTypes: MessageTypeModel[],
+  msgcodes: MsgCodeModel[],
+  protocols: ProtocolDescriptorModel[],
   handlers: HandlerModel[],
   diagnostics: ProjectDiagnostic[],
 ): void {
@@ -130,6 +151,7 @@ function analyzeTypeScript(
       location,
     });
   }
+  analyzeGeneratedProtocol(sourceFile, source.relativePath, messageTypes, msgcodes, protocols);
   visit(sourceFile);
 
   function visit(node: ts.Node): void {
@@ -146,6 +168,7 @@ function analyzeClass(
   handlers: HandlerModel[],
 ): void {
   const className = declaration.name!.text;
+  const handlerSignature = projectHandlerSignature(sourceFile, declaration);
   for (const decorator of decoratorsOf(declaration)) {
     const call = decoratorCall(decorator);
     const decoratorName = call ? expressionName(call.expression) : expressionName(decorator.expression);
@@ -162,6 +185,7 @@ function analyzeClass(
         owner: className,
         target: call.arguments[0]?.getText(sourceFile) ?? "unknown",
         descriptor: call.arguments[1]?.getText(sourceFile) ?? "unknown",
+        ...handlerSignature,
         location: sourceLocation(sourceFile, declaration.name!.getStart(sourceFile), relativePath),
       });
     }
@@ -173,16 +197,50 @@ function analyzeClass(
       const call = decoratorCall(decorator);
       if (!call) continue;
       const decoratorName = expressionName(call.expression);
-      if (decoratorName !== "rpc" && decoratorName !== "handler") continue;
+      if (decoratorName !== "rpc" && decoratorName !== "message" && decoratorName !== "handler") continue;
       handlers.push({
-        kind: decoratorName === "rpc" ? "rpc" : "actorMethod",
+        kind: decoratorName === "rpc" ? "rpc" : decoratorName === "message" ? "message" : "actorMethod",
         name: `${className}.${methodName}`,
         owner: className,
         target: className,
         descriptor: call.arguments[0]?.getText(sourceFile) ?? methodName,
+        ...projectMethodSignature(sourceFile, member, decoratorName),
         location: sourceLocation(sourceFile, member.name.getStart(sourceFile), relativePath),
       });
     }
+    if (member.body) {
+      collectProgrammaticHandlers(sourceFile, relativePath, member.body, className, methodName, handlers);
+    }
+  }
+}
+
+function collectProgrammaticHandlers(
+  sourceFile: ts.SourceFile,
+  relativePath: string,
+  root: ts.Node,
+  className: string,
+  methodName: string,
+  handlers: HandlerModel[],
+): void {
+  visit(root);
+
+  function visit(node: ts.Node): void {
+    if (ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression)
+      && node.expression.expression.kind === ts.SyntaxKind.ThisKeyword
+      && node.expression.name.text === "registerActorRpc") {
+      const descriptor = node.arguments[0]?.getText(sourceFile);
+      if (descriptor) {
+        handlers.push({
+          kind: "actorRpc",
+          name: `${className}.${methodName}`,
+          owner: className,
+          target: className,
+          descriptor,
+          location: sourceLocation(sourceFile, node.expression.name.getStart(sourceFile), relativePath),
+        });
+      }
+    }
+    ts.forEachChild(node, visit);
   }
 }
 
@@ -216,6 +274,8 @@ function validateProject(
   processes: readonly ProcessConfigModel[],
   machines: readonly MachineConfigModel[],
   declarations: readonly TypeDeclarationModel[],
+  protocols: readonly ProtocolDescriptorModel[],
+  handlers: readonly HandlerModel[],
   diagnostics: ProjectDiagnostic[],
 ): void {
   const entryScenes = declarations.filter((declaration) => declaration.kind === "entryScene");
@@ -258,6 +318,266 @@ function validateProject(
       });
     }
   }
+  validateHandlers(protocols, handlers, diagnostics);
+}
+
+function analyzeGeneratedProtocol(
+  sourceFile: ts.SourceFile,
+  relativePath: string,
+  messageTypes: MessageTypeModel[],
+  msgcodes: MsgCodeModel[],
+  protocols: ProtocolDescriptorModel[],
+): void {
+  const isServerProtocol = relativePath.includes("/generated/model/server/");
+  if (relativePath.endsWith("/protocol/messages.ts")) {
+    for (const statement of sourceFile.statements) {
+      if (!ts.isInterfaceDeclaration(statement) || !statement.name) continue;
+      messageTypes.push({
+        name: statement.name.text,
+        location: sourceLocation(sourceFile, statement.name.getStart(sourceFile), relativePath),
+      });
+    }
+  }
+  if (relativePath.endsWith("/protocol/msgcodes.ts")) {
+    for (const statement of sourceFile.statements) {
+      if (!ts.isVariableStatement(statement)) continue;
+      for (const declaration of statement.declarationList.declarations) {
+        const initializer = declaration.initializer ? unwrapExpression(declaration.initializer) : undefined;
+        if (!initializer || !ts.isObjectLiteralExpression(initializer)) continue;
+        for (const property of initializer.properties) {
+          if (!ts.isPropertyAssignment(property) || !ts.isNumericLiteral(property.initializer)) continue;
+          const name = propertyName(property.name);
+          if (!name) continue;
+          msgcodes.push({
+            name,
+            value: Number(property.initializer.text),
+            location: sourceLocation(sourceFile, property.name.getStart(sourceFile), relativePath),
+          });
+        }
+      }
+    }
+  }
+  if (!isServerProtocol || (!relativePath.endsWith("/protocol/rpcs.ts")
+    && !relativePath.endsWith("/protocol/messageDescriptors.ts"))) return;
+  for (const statement of sourceFile.statements) {
+    if (!ts.isVariableStatement(statement)) continue;
+    for (const declaration of statement.declarationList.declarations) {
+      if (!ts.isIdentifier(declaration.name) || !declaration.initializer
+        || !ts.isObjectLiteralExpression(declaration.initializer)) continue;
+      const group = declaration.name.text;
+      for (const property of declaration.initializer.properties) {
+        if (!ts.isPropertyAssignment(property) || !ts.isCallExpression(property.initializer)) continue;
+        const call = property.initializer;
+        const factory = expressionName(call.expression);
+        if (factory !== "defineRpc" && factory !== "defineMessage") continue;
+        const options = call.arguments[0];
+        if (!options || !ts.isObjectLiteralExpression(options)) continue;
+        const member = propertyName(property.name);
+        if (!member) continue;
+        const common = {
+          symbol: `${group}.${member}`,
+          group,
+          member,
+          name: objectStringProperty(options, "name") ?? `${group}.${member}`,
+          routing: objectStringProperty(options, "routing"),
+          expectsHandler: group !== "ClientMessages",
+          location: sourceLocation(sourceFile, property.name.getStart(sourceFile), relativePath),
+        };
+        if (factory === "defineRpc") {
+          protocols.push(compactProtocol({
+            kind: "rpc",
+            ...common,
+            requestType: typeArgumentText(sourceFile, call, 0),
+            responseType: typeArgumentText(sourceFile, call, 1),
+            requestCodeName: objectQualifiedProperty(options, "requestCode"),
+            responseCodeName: objectQualifiedProperty(options, "responseCode"),
+          }));
+        } else {
+          protocols.push(compactProtocol({
+            kind: "message",
+            ...common,
+            messageType: typeArgumentText(sourceFile, call, 0),
+            msgcodeName: objectQualifiedProperty(options, "msgcode"),
+          }));
+        }
+      }
+    }
+  }
+}
+
+function projectHandlerSignature(
+  sourceFile: ts.SourceFile,
+  declaration: ts.ClassDeclaration,
+): Pick<HandlerModel, "requestType" | "responseType" | "messageType"> {
+  for (const clause of declaration.heritageClauses ?? []) {
+    if (clause.token !== ts.SyntaxKind.ImplementsKeyword) continue;
+    for (const type of clause.types) {
+      const name = expressionName(type.expression);
+      const args = type.typeArguments?.map((argument) => argument.getText(sourceFile)) ?? [];
+      if (name === "SceneRpcHandler" || name === "ActorRpcHandler") {
+        return compactSignature({ requestType: args[1], responseType: args[2] });
+      }
+      if (name === "SceneMessageHandler" || name === "ActorMessageHandler") {
+        return compactSignature({ messageType: args[1] });
+      }
+    }
+  }
+  return {};
+}
+
+function projectMethodSignature(
+  sourceFile: ts.SourceFile,
+  method: ts.MethodDeclaration,
+  decoratorName: string,
+): Pick<HandlerModel, "requestType" | "responseType" | "messageType"> {
+  const request = method.parameters[0]?.type?.getText(sourceFile);
+  if (decoratorName === "handler" || decoratorName === "message") {
+    return compactSignature({ messageType: request });
+  }
+  const response = unwrapPromiseType(method.type?.getText(sourceFile));
+  return compactSignature({ requestType: request, responseType: response });
+}
+
+function validateHandlers(
+  protocols: readonly ProtocolDescriptorModel[],
+  handlers: readonly HandlerModel[],
+  diagnostics: ProjectDiagnostic[],
+): void {
+  const protocolBySymbol = new Map(protocols.map((protocol) => [protocol.symbol, protocol]));
+  const handlersByProtocol = new Map<string, HandlerModel[]>();
+  const bindingKeys = new Map<string, HandlerModel>();
+  for (const handler of handlers) {
+    if (handler.kind === "actorMethod") continue;
+    const symbol = normalizeDescriptorReference(handler.descriptor);
+    const protocol = protocolBySymbol.get(symbol);
+    if (!protocol) continue;
+    const linked = handlersByProtocol.get(symbol) ?? [];
+    linked.push(handler);
+    handlersByProtocol.set(symbol, linked);
+    const bindingKey = `${handler.target}|${symbol}`;
+    const previous = bindingKeys.get(bindingKey);
+    if (previous) {
+      diagnostics.push({
+        code: "tiangz.handler.duplicate",
+        severity: "error",
+        message: `${handler.target} 对协议 ${protocol.name} 重复注册 Handler：${previous.name}、${handler.name}`,
+        location: handler.location,
+      });
+    } else {
+      bindingKeys.set(bindingKey, handler);
+    }
+    if (protocol.kind === "rpc") {
+      if (handler.requestType && protocol.requestType && !typeMatches(handler.requestType, protocol.requestType)) {
+        diagnostics.push(typeMismatch(handler, protocol, "Request", protocol.requestType, handler.requestType));
+      }
+      if (handler.responseType && protocol.responseType && !typeMatches(handler.responseType, protocol.responseType)) {
+        diagnostics.push(typeMismatch(handler, protocol, "Response", protocol.responseType, handler.responseType));
+      }
+    } else if (handler.messageType && protocol.messageType && !typeMatches(handler.messageType, protocol.messageType)) {
+      diagnostics.push(typeMismatch(handler, protocol, "Message", protocol.messageType, handler.messageType));
+    }
+  }
+  for (const protocol of protocols) {
+    if (!protocol.expectsHandler || handlersByProtocol.has(protocol.symbol)) continue;
+    diagnostics.push({
+      code: "tiangz.handler.missing",
+      severity: "warning",
+      message: `协议 ${protocol.name}（${protocol.symbol}）没有找到 Handler`,
+      location: protocol.location,
+    });
+  }
+}
+
+function typeMismatch(
+  handler: HandlerModel,
+  protocol: ProtocolDescriptorModel,
+  role: string,
+  expected: string,
+  actual: string,
+): ProjectDiagnostic {
+  return {
+    code: "tiangz.handler.rpc-type-mismatch",
+    severity: "error",
+    message: `${handler.name} 的 ${role} 类型为 ${actual}，协议 ${protocol.name} 要求 ${expected}`,
+    location: handler.location,
+  };
+}
+
+function resolveProtocolCodes(protocols: ProtocolDescriptorModel[], msgcodes: readonly MsgCodeModel[]): void {
+  const values = new Map(msgcodes.map((code) => [code.name, code.value]));
+  for (let index = 0; index < protocols.length; index += 1) {
+    const protocol = protocols[index]!;
+    protocols[index] = {
+      ...protocol,
+      ...(protocol.requestCodeName && values.has(protocol.requestCodeName)
+        ? { requestCode: values.get(protocol.requestCodeName)! } : {}),
+      ...(protocol.responseCodeName && values.has(protocol.responseCodeName)
+        ? { responseCode: values.get(protocol.responseCodeName)! } : {}),
+      ...(protocol.msgcodeName && values.has(protocol.msgcodeName)
+        ? { msgcode: values.get(protocol.msgcodeName)! } : {}),
+    };
+  }
+}
+
+function compactProtocol(
+  value: { [Key in keyof ProtocolDescriptorModel]?: ProtocolDescriptorModel[Key] | undefined },
+): ProtocolDescriptorModel {
+  return Object.fromEntries(Object.entries(value).filter(([, item]) => item !== undefined)) as unknown as ProtocolDescriptorModel;
+}
+
+function compactSignature(
+  value: {
+    requestType?: string | undefined;
+    responseType?: string | undefined;
+    messageType?: string | undefined;
+  },
+): Pick<HandlerModel, "requestType" | "responseType" | "messageType"> {
+  return Object.fromEntries(Object.entries(value).filter(([, item]) => item !== undefined));
+}
+
+function propertyName(name: ts.PropertyName): string | undefined {
+  if (ts.isIdentifier(name) || ts.isStringLiteralLike(name) || ts.isNumericLiteral(name)) return name.text;
+  return undefined;
+}
+
+function typeArgumentText(sourceFile: ts.SourceFile, call: ts.CallExpression, index: number): string | undefined {
+  return call.typeArguments?.[index]?.getText(sourceFile);
+}
+
+function objectQualifiedProperty(node: ts.ObjectLiteralExpression, name: string): string | undefined {
+  for (const property of node.properties) {
+    if (!ts.isPropertyAssignment(property) || propertyName(property.name) !== name) continue;
+    const text = property.initializer.getText();
+    return text.startsWith("MsgCode.") ? text.slice("MsgCode.".length) : text;
+  }
+  return undefined;
+}
+
+function normalizeDescriptorReference(value: string): string {
+  return value.endsWith(".name") ? value.slice(0, -".name".length) : value;
+}
+
+function unwrapPromiseType(value: string | undefined): string | undefined {
+  if (!value) return undefined;
+  const match = /^Promise<(.+)>$/.exec(value);
+  return match?.[1] ?? value;
+}
+
+function typeMatches(actual: string, expected: string): boolean {
+  const normalizedExpected = expected.replaceAll(" ", "");
+  return actual.split("|").some((candidate) => {
+    const normalized = candidate.trim().replaceAll(" ", "");
+    return normalized === normalizedExpected || normalized === `Promise<${normalizedExpected}>`;
+  });
+}
+
+function unwrapExpression(expression: ts.Expression): ts.Expression {
+  let current = expression;
+  while (ts.isAsExpression(current) || ts.isSatisfiesExpression(current)
+    || ts.isParenthesizedExpression(current) || ts.isTypeAssertionExpression(current)) {
+    current = current.expression;
+  }
+  return current;
 }
 
 function sceneConfigs(value: unknown): SceneConfigModel[] {

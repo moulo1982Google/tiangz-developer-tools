@@ -11,11 +11,11 @@
 
 ## Phase 1：消息与 Handler 导航
 
-- [ ] 从协议生成文件建立 Request、Response、MsgCode 和 Descriptor 索引
-- [ ] 从消息跳转到 Handler，从 Handler 跳转到协议
-- [ ] 增加重复 Handler、缺失 Handler 和 RPC 类型不匹配诊断
-- [ ] 增加 Handler CodeLens 与 Hover
-- [ ] 将编辑器能力移入独立 Language Server
+- [x] 从协议生成文件建立 Request、Response、MsgCode 和 Descriptor 索引
+- [x] 从消息跳转到 Handler，从 Handler 跳转到协议
+- [x] 增加重复 Handler、缺失 Handler 和 RPC 类型不匹配诊断
+- [x] 增加 Handler CodeLens 与 Hover
+- [x] 将编辑器能力移入独立 Language Server
 
 ## Phase 2：配置启动与调试
 

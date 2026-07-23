@@ -9,6 +9,39 @@ export interface SourceLocation {
   readonly character: number;
 }
 
+export interface MessageTypeModel {
+  readonly name: string;
+  readonly location: SourceLocation;
+}
+
+export interface MsgCodeModel {
+  readonly name: string;
+  readonly value: number;
+  readonly location: SourceLocation;
+}
+
+export type ProtocolDescriptorKind = "rpc" | "message";
+
+export interface ProtocolDescriptorModel {
+  readonly kind: ProtocolDescriptorKind;
+  readonly symbol: string;
+  readonly group: string;
+  readonly member: string;
+  readonly name: string;
+  readonly requestType?: string;
+  readonly responseType?: string;
+  readonly messageType?: string;
+  readonly requestCodeName?: string;
+  readonly responseCodeName?: string;
+  readonly msgcodeName?: string;
+  readonly requestCode?: number;
+  readonly responseCode?: number;
+  readonly msgcode?: number;
+  readonly routing?: string;
+  readonly expectsHandler: boolean;
+  readonly location: SourceLocation;
+}
+
 export interface SceneConfigModel {
   readonly name: string;
   readonly sceneType: string;
@@ -50,6 +83,9 @@ export interface HandlerModel {
   readonly owner: string;
   readonly target: string;
   readonly descriptor: string;
+  readonly requestType?: string;
+  readonly responseType?: string;
+  readonly messageType?: string;
   readonly location: SourceLocation;
 }
 
@@ -67,6 +103,9 @@ export interface TiangZProjectSnapshot {
   readonly processes: readonly ProcessConfigModel[];
   readonly machines: readonly MachineConfigModel[];
   readonly declarations: readonly TypeDeclarationModel[];
+  readonly messageTypes: readonly MessageTypeModel[];
+  readonly msgcodes: readonly MsgCodeModel[];
+  readonly protocols: readonly ProtocolDescriptorModel[];
   readonly handlers: readonly HandlerModel[];
   readonly diagnostics: readonly ProjectDiagnostic[];
 }

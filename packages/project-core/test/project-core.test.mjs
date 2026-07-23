@@ -97,3 +97,144 @@ class LoginActor extends Actor {
     { kind: "actorMethod", name: "LoginActor.handleLogin", descriptor: "LoginProtocol.Login.name" },
   ]);
 });
+
+test("indexes generated RPC and message descriptors with resolved msgcodes", () => {
+  const snapshot = analyzeTiangZProject([
+    {
+      relativePath: "app/generated/model/server/demo/protocol/messages.ts",
+      text: `export interface C2S_Login {}\nexport interface S2C_Login {}`,
+    },
+    {
+      relativePath: "app/generated/model/server/demo/protocol/msgcodes.ts",
+      text: `export const OuterMessage = { C2S_Login: 10001, S2C_Login: 10002, C2G_Ping: 10003 } as const;`,
+    },
+    {
+      relativePath: "app/generated/model/server/demo/protocol/rpcs.ts",
+      text: `
+export const LoginProtocol = {
+  Login: defineRpc<C2S_Login, S2C_Login>({
+    name: "Login.Login",
+    requestCode: MsgCode.C2S_Login,
+    responseCode: MsgCode.S2C_Login,
+    requestCodec: C2S_LoginCodec,
+    responseCodec: S2C_LoginCodec,
+  }),
+};`,
+    },
+    {
+      relativePath: "app/generated/model/server/demo/protocol/messageDescriptors.ts",
+      text: `
+export const GateMessages = {
+  Ping: defineMessage<C2G_Ping>({ name: "Gate.Ping", msgcode: MsgCode.C2G_Ping, codec: C2G_PingCodec }),
+};`,
+    },
+    {
+      relativePath: "app/demo/LoginHandler.ts",
+      text: `
+@rpcHandler(LoginScene, LoginProtocol.Login)
+class LoginHandler implements SceneRpcHandler<LoginScene, C2S_Login, S2C_Login> {}`,
+    },
+    {
+      relativePath: "app/demo/PingHandler.ts",
+      text: `
+@messageHandler(GateScene, GateMessages.Ping)
+class PingHandler implements SceneMessageHandler<GateScene, C2G_Ping> {}`,
+    },
+  ]);
+  assert.deepEqual(snapshot.msgcodes.map(({ name, value }) => ({ name, value })), [
+    { name: "C2S_Login", value: 10001 },
+    { name: "S2C_Login", value: 10002 },
+    { name: "C2G_Ping", value: 10003 },
+  ]);
+  assert.deepEqual(snapshot.protocols.map((protocol) => ({
+    kind: protocol.kind,
+    symbol: protocol.symbol,
+    requestType: protocol.requestType,
+    responseType: protocol.responseType,
+    messageType: protocol.messageType,
+    requestCode: protocol.requestCode,
+    responseCode: protocol.responseCode,
+    msgcode: protocol.msgcode,
+  })), [
+    {
+      kind: "message",
+      symbol: "GateMessages.Ping",
+      requestType: undefined,
+      responseType: undefined,
+      messageType: "C2G_Ping",
+      requestCode: undefined,
+      responseCode: undefined,
+      msgcode: 10003,
+    },
+    {
+      kind: "rpc",
+      symbol: "LoginProtocol.Login",
+      requestType: "C2S_Login",
+      responseType: "S2C_Login",
+      messageType: undefined,
+      requestCode: 10001,
+      responseCode: 10002,
+      msgcode: undefined,
+    },
+  ]);
+  assert.deepEqual(snapshot.diagnostics, []);
+});
+
+test("reports missing, duplicate and mismatched handlers", () => {
+  const snapshot = analyzeTiangZProject([
+    {
+      relativePath: "app/generated/model/server/demo/protocol/rpcs.ts",
+      text: `
+export const LoginProtocol = {
+  Login: defineRpc<C2S_Login, S2C_Login>({ name: "Login.Login", requestCode: MsgCode.C2S_Login, responseCode: MsgCode.S2C_Login }),
+  Missing: defineRpc<C2S_Missing, S2C_Missing>({ name: "Login.Missing", requestCode: MsgCode.C2S_Missing, responseCode: MsgCode.S2C_Missing }),
+};`,
+    },
+    {
+      relativePath: "app/demo/LoginHandlers.ts",
+      text: `
+@rpcHandler(LoginScene, LoginProtocol.Login)
+class LoginHandler implements SceneRpcHandler<LoginScene, WrongRequest, S2C_Login> {}
+@rpcHandler(LoginScene, LoginProtocol.Login)
+class DuplicateLoginHandler implements SceneRpcHandler<LoginScene, C2S_Login, S2C_Login> {}`,
+    },
+  ]);
+  assert.deepEqual(snapshot.diagnostics.map((diagnostic) => diagnostic.code).sort(), [
+    "tiangz.handler.duplicate",
+    "tiangz.handler.missing",
+    "tiangz.handler.rpc-type-mismatch",
+  ]);
+});
+
+test("does not require a server Handler for ClientMessages push descriptors", () => {
+  const snapshot = analyzeTiangZProject([{
+    relativePath: "app/generated/model/server/demo/protocol/messageDescriptors.ts",
+    text: `export const ClientMessages = {
+      Ready: defineMessage<G2C_Ready>({ name: "Client.Ready", msgcode: MsgCode.G2C_Ready }),
+    };`,
+  }]);
+  assert.equal(snapshot.protocols[0].expectsHandler, false);
+  assert.deepEqual(snapshot.diagnostics, []);
+});
+
+test("indexes registerActorRpc as an explicit routed Handler", () => {
+  const snapshot = analyzeTiangZProject([
+    {
+      relativePath: "app/generated/model/server/demo/protocol/rpcs.ts",
+      text: `export const LoginProtocol = {
+        Login: defineRpc<C2S_Login, S2C_Login>({ name: "Login.Login" }),
+      };`,
+    },
+    {
+      relativePath: "app/demo/LoginScene.ts",
+      text: `class LoginScene {
+        registerHandlers() {
+          this.registerActorRpc(LoginProtocol.Login, (request) => this.resolve(request.account));
+        }
+      }`,
+    },
+  ]);
+  assert.equal(snapshot.handlers[0].kind, "actorRpc");
+  assert.equal(snapshot.handlers[0].descriptor, "LoginProtocol.Login");
+  assert.deepEqual(snapshot.diagnostics, []);
+});
