@@ -26,6 +26,8 @@ app/**/*.ts -----------/                         |
 
 工程依赖规则由 project-core 基于 TypeScript AST 检查，`Generated/Model` 与负责装配业务的 `Generated/Hotfix` 使用不同边界。完整矩阵见[工程依赖规则](dependency-rules.md)。
 
+Generated 完整性由根目录 `codegen.manifest.json` 描述。Language Server 比对内容输入、文件集合与输出哈希，不启动生成器。详见[Generated 完整性检查](generated-integrity.md)。
+
 ## 性能边界
 
 - 文件读取使用 VS Code 异步文件系统 API。

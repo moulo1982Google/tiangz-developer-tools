@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import test from "node:test";
 
 import {
@@ -353,3 +354,82 @@ import "./demo/LoginScene";`,
   ]);
   assert.deepEqual(snapshot.diagnostics, []);
 });
+
+test("accepts generated files that match the codegen manifest", () => {
+  const input = "message Login {}\n";
+  const output = "// generated\nexport interface Login {}\n";
+  const manifest = generatedManifest({
+    contentInputs: { "proto/Login.proto": textHash(input) },
+    outputs: { "app/generated/model/server/Login.ts": textHash(output) },
+    outputRoots: [{ path: "app/generated/model/server", extensions: [".ts"] }],
+  });
+  const snapshot = analyzeTiangZProject([
+    { relativePath: "codegen.manifest.json", text: JSON.stringify(manifest) },
+    { relativePath: "proto/Login.proto", text: input },
+    { relativePath: "app/generated/model/server/Login.ts", text: output },
+  ]);
+  assert.deepEqual(snapshot.diagnostics, []);
+});
+
+test("reports stale, modified, missing and orphan generated state", () => {
+  const manifest = generatedManifest({
+    contentInputs: { "proto/Login.proto": textHash("old input") },
+    outputs: {
+      "app/generated/model/server/Login.ts": textHash("old output"),
+      "app/generated/model/server/Missing.ts": textHash("missing"),
+    },
+    outputRoots: [{ path: "app/generated/model/server", extensions: [".ts"] }],
+  });
+  const snapshot = analyzeTiangZProject([
+    { relativePath: "codegen.manifest.json", text: JSON.stringify(manifest) },
+    { relativePath: "proto/Login.proto", text: "new input" },
+    { relativePath: "app/generated/model/server/Login.ts", text: "// changed output" },
+    { relativePath: "app/generated/model/server/Orphan.ts", text: "// orphan" },
+  ]);
+  assert.deepEqual(snapshot.diagnostics.map((diagnostic) => diagnostic.code).sort(), [
+    "tiangz.generated.missing",
+    "tiangz.generated.modified",
+    "tiangz.generated.orphan",
+    "tiangz.generated.stale",
+  ]);
+});
+
+test("marks scene imports stale only when the selected file set changes", () => {
+  const scene = { relativePath: "app/demo/scenes/LoginScene.ts", text: "export const body = 2;" };
+  const unchanged = generatedManifest({
+    selections: [{ kind: "scene", roots: ["app"], paths: [scene.relativePath] }],
+  });
+  assert.deepEqual(analyzeTiangZProject([
+    { relativePath: "codegen.manifest.json", text: JSON.stringify(unchanged) },
+    scene,
+  ]).diagnostics, []);
+
+  const stale = generatedManifest({
+    selections: [{ kind: "scene", roots: ["app"], paths: [] }],
+  });
+  assert.deepEqual(analyzeTiangZProject([
+    { relativePath: "codegen.manifest.json", text: JSON.stringify(stale) },
+    scene,
+  ]).diagnostics.map((diagnostic) => diagnostic.code), ["tiangz.generated.stale"]);
+});
+
+function generatedManifest(overrides) {
+  return {
+    version: 1,
+    hashAlgorithm: "sha256-normalized-text-v1",
+    generators: {
+      test: {
+        command: "npm run codegen:test",
+        contentInputs: {},
+        selections: [],
+        outputs: {},
+        outputRoots: [],
+        ...overrides,
+      },
+    },
+  };
+}
+
+function textHash(text) {
+  return createHash("sha256").update(text.replaceAll("\r\n", "\n"), "utf8").digest("hex");
+}

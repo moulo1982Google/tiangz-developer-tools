@@ -1,5 +1,11 @@
 # 更新记录
 
+## 0.5.0
+
+- 读取 `codegen.manifest.json`，检查内容输入、Scene/Handler 文件集合与生成输出。
+- 增加 Generated 过期、手改、缺失、遗留和无效 Manifest 诊断。
+- 按 Manifest 动态发现 Proto、Native、Cocos 与 Rust 生成文件，不把客户端 TS 混入服务端语义索引。
+
 ## 0.4.0
 
 - 使用 TypeScript AST 检查 Core、Generated/Model、Model、Hotfix、Game 和业务目录的依赖方向。

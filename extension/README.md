@@ -8,6 +8,7 @@
 - RPC、Message、MsgCode 与 Handler 中文 Hover。
 - Handler 和协议 CodeLens。
 - 重复 Handler、缺失 Handler、RPC 类型不匹配、工程依赖方向与配置错误诊断。
+- Generated 过期、缺失、遗留与手工修改诊断。
 - “TiangZ：显示语言服务器状态”性能观测命令。
 - 从工程树运行、调试、停止和重启 Process。
 - StartMachine 进程组展开为独立 VS Code Task。

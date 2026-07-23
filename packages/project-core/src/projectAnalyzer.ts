@@ -3,6 +3,7 @@ import path from "node:path";
 import ts from "typescript";
 
 import { validateTypeScriptDependencies } from "./dependencyRules.js";
+import { validateGeneratedIntegrity } from "./generatedIntegrity.js";
 
 import type {
   DeclarationKind,
@@ -47,7 +48,7 @@ export function analyzeTiangZProject(sources: readonly ProjectSource[]): TiangZP
 
   for (const source of [...sources].sort((left, right) => left.relativePath.localeCompare(right.relativePath, "en"))) {
     const relativePath = normalizePath(source.relativePath);
-    if (relativePath.endsWith(".ts")) {
+    if (relativePath.startsWith("app/") && relativePath.endsWith(".ts")) {
       analyzeTypeScript(
         { ...source, relativePath },
         declarations,
@@ -62,6 +63,7 @@ export function analyzeTiangZProject(sources: readonly ProjectSource[]): TiangZP
     }
   }
 
+  validateGeneratedIntegrity(sources, diagnostics);
   resolveProtocolCodes(protocols, msgcodes);
   validateProject(processes, machines, declarations, protocols, handlers, diagnostics);
   return {

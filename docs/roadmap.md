@@ -28,9 +28,9 @@
 ## Phase 3：工程规则
 
 - [x] 检查 Core、Generated、Model、Hotfix 和 Demo 依赖方向
-- [ ] 检测 Generated 文件过期或被手工修改
+- [x] 检测 Generated 文件过期、缺失、遗留或被手工修改
 - [ ] 提供可在 CI 运行的 `check:project` CLI
-- [ ] 与 proto、scene、client handler 和 native codegen 状态联动
+- [ ] 为 proto、scene、client handler 和 native 提供定向重新生成操作
 
 ## Phase 4：运行时 Inspector
 

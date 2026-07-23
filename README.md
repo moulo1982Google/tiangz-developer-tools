@@ -15,6 +15,7 @@ TiangZ 框架的工程模型、静态检查与 VS Code 开发工具。
 - 检查配置引用、重复或缺失 Handler，以及 RPC 消息类型不匹配。
 - 将工程问题同时显示在工程树与 VS Code Problems 面板。
 - 检查 Core、Generated/Model、Model、Hotfix、Game 与业务目录的依赖方向。
+- 根据 `codegen.manifest.json` 检测生成文件过期、缺失、遗留或被手工修改。
 - 独立 Language Server 使用 150ms 防抖，不保留 TypeScript AST，并提供运行状态指标。
 - 从工程树、原生资源管理器或命令面板运行、调试、停止和重启单个 Process。
 - 将 StartMachine 的 Process 展开为独立 VS Code Task，可分别查看 PID、日志和状态。
@@ -63,6 +64,8 @@ npm run package:extension
 详细说明见 [运行与调试](docs/run-and-debug.md)。
 
 目录分层与组合入口规则见[工程依赖规则](docs/dependency-rules.md)。
+
+生成器所有权和诊断说明见[Generated 完整性检查](docs/generated-integrity.md)。
 
 ## 工程边界
 

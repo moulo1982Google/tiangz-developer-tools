@@ -476,7 +476,7 @@ function prefersServer(relativePath: string): boolean {
 }
 
 function isProjectFile(uri: string): boolean {
-  return uri.endsWith(".ts") || uri.includes("/configs/") && uri.endsWith(".json");
+  return /\.(?:ts|json|proto|native|mjs|rs|js)$/.test(uri);
 }
 
 function isIndexedRootFiles(value: unknown): value is IndexedRootFiles {

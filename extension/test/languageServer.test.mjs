@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
+import { createHash } from "node:crypto";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
@@ -128,6 +129,36 @@ class BrokenLoginHandler implements SceneRpcHandler<LoginScene, WrongRequest, S2
     assert.equal(invalidDependency.severity, 1);
     assert.match(invalidDependency.message, /Core 不允许依赖 业务目录 demo/);
 
+    const generatedUri = `${rootUri}/app/generated/model/server/demo/Changed.ts`;
+    const manifestUri = `${rootUri}/codegen.manifest.json`;
+    open(rpc, generatedUri, "// changed generated output", 1);
+    const generatedDiagnostics = rpc.waitForNotification(
+      "textDocument/publishDiagnostics",
+      (params) => params.uri === generatedUri
+        && params.diagnostics.some((diagnostic) => diagnostic.code === "tiangz.generated.modified"),
+    );
+    open(rpc, manifestUri, JSON.stringify({
+      version: 1,
+      hashAlgorithm: "sha256-normalized-text-v1",
+      generators: {
+        proto: {
+          command: "npm run codegen:proto",
+          contentInputs: {},
+          selections: [],
+          outputs: {
+            "app/generated/model/server/demo/Changed.ts": textHash("// expected generated output"),
+          },
+          outputRoots: [{ path: "app/generated/model/server", extensions: [".ts"], ignore: [] }],
+        },
+      },
+    }), 1);
+    assert.match(
+      (await generatedDiagnostics).diagnostics.find(
+        (diagnostic) => diagnostic.code === "tiangz.generated.modified",
+      ).message,
+      /请勿手工修改/,
+    );
+
     await rpc.request("shutdown", null);
     rpc.notify("exit", null);
     await rpc.waitForExit();
@@ -140,6 +171,10 @@ function open(rpc, uri, text, version) {
   rpc.notify("textDocument/didOpen", {
     textDocument: { uri, languageId: "typescript", version, text },
   });
+}
+
+function textHash(text) {
+  return createHash("sha256").update(text.replaceAll("\r\n", "\n"), "utf8").digest("hex");
 }
 
 class StdioRpc {
