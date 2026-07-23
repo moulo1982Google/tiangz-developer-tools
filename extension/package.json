@@ -1,8 +1,8 @@
 {
   "name": "tiangz-developer-tools",
   "displayName": "TiangZ Developer Tools",
-  "description": "TiangZ Process、Scene、Component 与 Handler 工程工具",
-  "version": "0.2.0",
+  "description": "TiangZ Process、Scene、协议导航、运行与 TypeScript 调试工具",
+  "version": "0.3.0",
   "publisher": "moulo",
   "author": "moulo",
   "license": "MIT",
@@ -12,6 +12,12 @@
   },
   "engines": {
     "vscode": "^1.91.0"
+  },
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": false,
+      "description": "启动 TiangZ 构建、Process 和调试器需要可信工作区。"
+    }
   },
   "activationEvents": [
     "onView:tiangzProject",
@@ -27,7 +33,8 @@
     "Scene",
     "Actor",
     "Component",
-    "Handler"
+    "Handler",
+    "Debug"
   ],
   "files": [
     "dist/extension.cjs",
@@ -42,13 +49,41 @@
     "build": "node ../tools/build-extension.mjs",
     "check:package": "vsce ls --no-dependencies",
     "prepackage": "node -e \"require('node:fs').mkdirSync('../dist', { recursive: true })\"",
-    "package": "npm run build && vsce package --no-dependencies --out ../dist/tiangz-developer-tools-0.2.0.vsix"
+    "package": "npm run build && vsce package --no-dependencies --out ../dist/tiangz-developer-tools-0.3.0.vsix"
   },
   "devDependencies": {
     "@types/vscode": "^1.91.0",
     "@vscode/vsce": "^3.6.2"
   },
   "contributes": {
+    "taskDefinitions": [
+      {
+        "type": "tiangz-process",
+        "required": [
+          "process",
+          "config",
+          "mode"
+        ],
+        "properties": {
+          "process": {
+            "type": "string",
+            "description": "TiangZ Process 名称。"
+          },
+          "config": {
+            "type": "string",
+            "description": "Process 配置相对路径。"
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "run",
+              "debug"
+            ],
+            "description": "Process 启动模式。"
+          }
+        }
+      }
+    ],
     "views": {
       "explorer": [
         {
@@ -78,6 +113,45 @@
       {
         "command": "tiangzDeveloperTools.openUriLocation",
         "title": "TiangZ：打开协议位置"
+      },
+      {
+        "command": "tiangzDeveloperTools.runProcess",
+        "title": "TiangZ：运行 Process",
+        "icon": "$(play)"
+      },
+      {
+        "command": "tiangzDeveloperTools.debugProcess",
+        "title": "TiangZ：调试 Process",
+        "icon": "$(debug-alt)"
+      },
+      {
+        "command": "tiangzDeveloperTools.attachProcess",
+        "title": "TiangZ：附加到 Process"
+      },
+      {
+        "command": "tiangzDeveloperTools.stopProcess",
+        "title": "TiangZ：停止 Process",
+        "icon": "$(debug-stop)"
+      },
+      {
+        "command": "tiangzDeveloperTools.runMachine",
+        "title": "TiangZ：启动 Machine 进程组",
+        "icon": "$(run-all)"
+      },
+      {
+        "command": "tiangzDeveloperTools.stopMachine",
+        "title": "TiangZ：停止 Machine 进程组",
+        "icon": "$(debug-stop)"
+      },
+      {
+        "command": "tiangzDeveloperTools.restartProcess",
+        "title": "TiangZ：重启 Process",
+        "icon": "$(debug-restart)"
+      },
+      {
+        "command": "tiangzDeveloperTools.stopAllProcesses",
+        "title": "TiangZ：停止所有 Process",
+        "icon": "$(debug-stop)"
       }
     ],
     "menus": {
@@ -86,13 +160,53 @@
           "command": "tiangzDeveloperTools.refreshProject",
           "when": "view == tiangzProject",
           "group": "navigation"
+        },
+        {
+          "command": "tiangzDeveloperTools.stopAllProcesses",
+          "when": "view == tiangzProject",
+          "group": "navigation@2"
         }
       ],
       "view/item/context": [
         {
           "command": "tiangzDeveloperTools.openLocation",
-          "when": "view == tiangzProject && viewItem == tiangzLocation",
+          "when": "view == tiangzProject && (viewItem == tiangzLocation || viewItem == tiangzStoppedProcessConfig || viewItem == tiangzRunningProcessConfig || viewItem == tiangzMachineConfig)",
           "group": "inline"
+        },
+        {
+          "command": "tiangzDeveloperTools.runProcess",
+          "when": "view == tiangzProject && viewItem == tiangzStoppedProcessConfig",
+          "group": "tiangzRun@1"
+        },
+        {
+          "command": "tiangzDeveloperTools.debugProcess",
+          "when": "view == tiangzProject && viewItem == tiangzStoppedProcessConfig",
+          "group": "tiangzRun@2"
+        },
+        {
+          "command": "tiangzDeveloperTools.attachProcess",
+          "when": "view == tiangzProject && viewItem == tiangzRunningProcessConfig",
+          "group": "tiangzRun@2"
+        },
+        {
+          "command": "tiangzDeveloperTools.stopProcess",
+          "when": "view == tiangzProject && viewItem == tiangzRunningProcessConfig",
+          "group": "tiangzRun@3"
+        },
+        {
+          "command": "tiangzDeveloperTools.restartProcess",
+          "when": "view == tiangzProject && viewItem == tiangzRunningProcessConfig",
+          "group": "tiangzRun@4"
+        },
+        {
+          "command": "tiangzDeveloperTools.runMachine",
+          "when": "view == tiangzProject && viewItem == tiangzMachineConfig",
+          "group": "tiangzRun@1"
+        },
+        {
+          "command": "tiangzDeveloperTools.stopMachine",
+          "when": "view == tiangzProject && viewItem == tiangzMachineConfig",
+          "group": "tiangzRun@2"
         }
       ]
     },
@@ -125,6 +239,51 @@
           "default": 2097152,
           "minimum": 65536,
           "description": "单个配置或 TypeScript 文件允许索引的最大字节数。"
+        },
+        "tiangzDeveloperTools.buildTypeScriptOnLaunch": {
+          "type": "boolean",
+          "default": true,
+          "description": "启动 Process 前是否执行 TypeScript 构建命令。"
+        },
+        "tiangzDeveloperTools.runBuildCommand": {
+          "type": "string",
+          "default": "npm run build",
+          "description": "普通运行前执行的 TypeScript 构建命令。"
+        },
+        "tiangzDeveloperTools.debugBuildCommand": {
+          "type": "string",
+          "default": "npm run build:debug",
+          "description": "TypeScript 调试前执行的带 sourcemap 构建命令。"
+        },
+        "tiangzDeveloperTools.cargoCommand": {
+          "type": "string",
+          "default": "cargo",
+          "description": "用于构建 TiangZ 可执行文件的 Cargo 命令。"
+        },
+        "tiangzDeveloperTools.cargoBuildArgs": {
+          "type": "array",
+          "default": [
+            "build",
+            "--bin",
+            "TiangZ"
+          ],
+          "items": {
+            "type": "string"
+          },
+          "description": "Cargo 构建参数；KCP 配置可追加 --features 和 kcp。"
+        },
+        "tiangzDeveloperTools.debugPortBase": {
+          "type": "number",
+          "default": 9230,
+          "minimum": 1024,
+          "maximum": 65436,
+          "description": "没有 process.debug 时，临时 Inspector 端口的搜索起点。"
+        },
+        "tiangzDeveloperTools.inspectorConnectTimeoutMs": {
+          "type": "number",
+          "default": 15000,
+          "minimum": 1000,
+          "description": "自动附加时等待 V8 Inspector 就绪的超时时间。"
         }
       }
     }

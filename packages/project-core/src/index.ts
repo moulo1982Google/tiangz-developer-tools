@@ -1,4 +1,6 @@
 export { analyzeTiangZProject } from "./projectAnalyzer.js";
+export { createDebugConfig, resolveMachineProcessPaths } from "./launch.js";
+export type { DebugConfigOverride, GeneratedDebugConfig } from "./launch.js";
 export type {
   DeclarationKind,
   HandlerKind,
@@ -7,6 +9,7 @@ export type {
   MessageTypeModel,
   MsgCodeModel,
   ProcessConfigModel,
+  ProcessDebugConfigModel,
   ProjectDiagnostic,
   ProjectDiagnosticSeverity,
   ProjectSource,

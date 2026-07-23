@@ -4,7 +4,7 @@ TiangZ 框架的工程模型、静态检查与 VS Code 开发工具。
 
 这个插件不替代 TypeScript，也不负责 `.native` 语言支持。它关注 TiangZ 特有的 Process、Scene、Actor、Component、Handler 和启动配置之间的关系。
 
-## v0.2.0 能力
+## v0.3.0 能力
 
 - 扫描 `configs/<环境>/**/*.json`，建立 Environment、Machine、Process 和入口 Scene 模型。
 - 使用 TypeScript Compiler API 识别 `@entryScene`、`@scene`、`@actor` 和 `@component`。
@@ -15,6 +15,11 @@ TiangZ 框架的工程模型、静态检查与 VS Code 开发工具。
 - 检查配置引用、重复或缺失 Handler，以及 RPC 消息类型不匹配。
 - 将工程问题同时显示在工程树与 VS Code Problems 面板。
 - 独立 Language Server 使用 150ms 防抖，不保留 TypeScript AST，并提供运行状态指标。
+- 从工程树或命令面板运行、调试、停止和重启单个 Process。
+- 将 StartMachine 的 Process 展开为独立 VS Code Task，可分别查看 PID、日志和状态。
+- 自动执行 TypeScript/Cargo 构建，直接运行 Cargo 产出的 TiangZ executable。
+- 自动等待 V8 Inspector 并附加 VS Code JavaScript Debugger，无需维护 `launch.json`。
+- 原配置没有 `process.debug` 时，在 VS Code 工作区存储中生成并清理临时调试配置。
 
 ## 本地开发
 
@@ -24,7 +29,7 @@ npm run check
 npm run package:extension
 ```
 
-生成的 VSIX 位于 `dist/tiangz-developer-tools-0.2.0.vsix`。
+生成的 VSIX 位于 `dist/tiangz-developer-tools-0.3.0.vsix`。
 
 ## 配置
 
@@ -35,9 +40,26 @@ npm run package:extension
   "tiangzDeveloperTools.configRoot": "configs",
   "tiangzDeveloperTools.sourceRoots": ["app"],
   "tiangzDeveloperTools.initialFileLimit": 10000,
-  "tiangzDeveloperTools.maxFileSizeBytes": 2097152
+  "tiangzDeveloperTools.maxFileSizeBytes": 2097152,
+  "tiangzDeveloperTools.buildTypeScriptOnLaunch": true,
+  "tiangzDeveloperTools.runBuildCommand": "npm run build",
+  "tiangzDeveloperTools.debugBuildCommand": "npm run build:debug",
+  "tiangzDeveloperTools.cargoBuildArgs": ["build", "--bin", "TiangZ"]
 }
 ```
+
+## 运行与调试
+
+在“TiangZ 工程”树中右键 Process：
+
+- “运行 Process”：普通构建后启动独立 Task。
+- “调试 Process”：构建 debug bundle、启动 Process、等待 Inspector 并自动附加。
+- “附加到 Process”：重新附加已经在调试模式运行的 Process。
+- “停止/重启 Process”：管理对应的进程树和调试会话。
+
+右键 Machine 可一次启动或停止该 Machine 引用的全部 Process。插件只在可信工作区执行构建和进程命令。
+
+详细说明见 [运行与调试](docs/run-and-debug.md)。
 
 ## 工程边界
 

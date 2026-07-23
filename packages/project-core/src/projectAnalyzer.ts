@@ -114,13 +114,25 @@ function analyzeConfig(
     return;
   }
   if (!isRecord(value.process) || typeof value.process.name !== "string") return;
+  const debug = processDebugConfig(value.process.debug);
   processes.push({
     environment,
     name: value.process.name,
     relativePath: source.relativePath,
+    ...(debug ? { debug } : {}),
     scenes: sceneConfigs(value.scenes),
     knownScenes: sceneConfigs(value.knownScenes),
   });
+}
+
+function processDebugConfig(value: unknown) {
+  if (!isRecord(value) || typeof value.inspectorPort !== "number") return undefined;
+  return {
+    inspectorIp: typeof value.inspectorIp === "string" ? value.inspectorIp : "127.0.0.1",
+    inspectorPort: value.inspectorPort,
+    breakOnStart: value.breakOnStart === true,
+    allowRemote: value.allowRemote === true,
+  };
 }
 
 function analyzeTypeScript(

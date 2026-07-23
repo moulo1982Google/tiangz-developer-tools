@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.3.0
+
+- 增加单 Process 运行、调试、附加、停止和重启命令。
+- 使用 VS Code CustomExecution Task 管理真实 TiangZ PID、Terminal 与进程树生命周期。
+- 自动执行普通/debug TypeScript 构建和 Cargo 构建。
+- 自动等待 V8 Inspector 并附加 VS Code JavaScript Debugger。
+- 原配置没有 `process.debug` 时生成临时调试配置并自动选择空闲端口。
+- 将 Machine 进程组展开为独立 Task，支持整组启动和停止。
+- 工程树显示 Process 状态、PID、配置、Inspector 与 Scene 端口。
+
 ## 0.2.0
 
 - 建立 RPC、Message、Request、Response、MsgCode 与 Descriptor 语义索引。

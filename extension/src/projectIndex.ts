@@ -1,6 +1,6 @@
 import * as vscode from "vscode";
 
-import type { TiangZProjectSnapshot } from "../../packages/project-core/src/index.js";
+import type { TiangZProjectSnapshot } from "../../packages/project-core/src/types.js";
 
 const EXCLUDE = "**/{node_modules,.git,target,dist,out,temp,library}/**";
 

@@ -39,3 +39,22 @@ app/**/*.ts -----------/                         |
 ## 插件关系
 
 TiangZ Developer Tools 与 TiangZ Native Language 是两个独立扩展。前者理解整个工程，后者只理解 `.native`。未来可以通过 TiangZ Extension Pack 一键安装，但两个扩展不互相控制生命周期。
+
+## 启动与调试
+
+```text
+ProcessConfig -----> Build Coordinator -----> Cargo executable
+      |                                        |
+      |                                        `-> VS Code CustomExecution Task
+      `-> debug / 临时 debug 配置                         |
+                                                       |-> Terminal
+                                                       |-> PID/退出状态
+                                                       `-> V8 Inspector -> VS Code Debugger
+```
+
+- 构建发生在启动 Task 之前；Machine 内多个 Process 共享一次构建结果。
+- Task 直接启动 Cargo `compiler-artifact.executable`，状态中的 PID 是 TiangZ，而不是 Cargo。
+- Machine 配置会展开为多个独立 Task，以便分别查看日志、停止和重启。
+- 调试优先使用配置中的 `process.debug`；缺失时在 VS Code 工作区存储目录生成临时配置。
+- 调试器断开不会自动停止 Process；Process 退出会终止对应调试会话。
+- 工作区关闭、插件卸载或 Task 停止时会终止仍由插件管理的进程树。

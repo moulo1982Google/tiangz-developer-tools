@@ -8,13 +8,16 @@ import {
   type ServerOptions,
 } from "vscode-languageclient/node";
 
-import type { TiangZProjectSnapshot } from "../../packages/project-core/src/index.js";
+import { resolveMachineProcessPaths } from "../../packages/project-core/src/launch.js";
+import type { ProcessConfigModel, TiangZProjectSnapshot } from "../../packages/project-core/src/types.js";
+import { attachDebugger, prepareDebugLaunch } from "./debugSession.js";
 import {
   discoverWorkspaceFolder,
   type DiscoveredProject,
   type IndexedProject,
 } from "./projectIndex.js";
 import { ProjectTreeProvider, type ProjectNode } from "./projectTree.js";
+import { TiangZProcessManager } from "./processManager.js";
 
 const INDEX_FILES_NOTIFICATION = "tiangzProject/indexFiles";
 const SNAPSHOT_NOTIFICATION = "tiangzProject/snapshot";
@@ -45,10 +48,13 @@ let client: LanguageClient | undefined;
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
   const tree = new ProjectTreeProvider();
+  const processManager = new TiangZProcessManager(vscode.window.createOutputChannel("TiangZ 启动与构建"));
+  const debugSessions = new Map<string, vscode.DebugSession>();
   const view = vscode.window.createTreeView("tiangzProject", { treeDataProvider: tree, showCollapseAll: true });
   let projects: readonly IndexedProject[] = [];
   let discoveries: readonly DiscoveredProject[] = [];
   let refreshTimer: NodeJS.Timeout | undefined;
+  const debugConfigStorage = context.storageUri ?? context.globalStorageUri;
 
   const refresh = async (): Promise<void> => {
     const folders = vscode.workspace.workspaceFolders ?? [];
@@ -109,8 +115,19 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     watcher.onDidChange(scheduleRefresh, undefined, context.subscriptions);
     watcher.onDidDelete(scheduleRefresh, undefined, context.subscriptions);
   }
+  const processStateSubscription = processManager.onDidChange(() => {
+    tree.setProcessStatuses(processManager.getStatuses());
+    for (const [key, session] of debugSessions) {
+      const status = [...processManager.getStatuses().values()].find((candidate) => candidate.key === key);
+      if (status && (status.state === "stopped" || status.state === "failed")) {
+        void vscode.debug.stopDebugging(session);
+      }
+    }
+  });
   context.subscriptions.push(
     view,
+    processManager,
+    processStateSubscription,
     ...watchers,
     snapshotSubscription,
     vscode.workspace.onDidChangeWorkspaceFolders(scheduleRefresh),
@@ -122,6 +139,38 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.commands.registerCommand("tiangzDeveloperTools.openUriLocation", openUriLocation),
     vscode.commands.registerCommand("tiangzDeveloperTools.showProjectSummary", () => showSummary(projects)),
     vscode.commands.registerCommand("tiangzDeveloperTools.showServerStats", showServerStats),
+    vscode.commands.registerCommand("tiangzDeveloperTools.runProcess", (node?: ProjectNode) => runCommand(
+      () => launchProcess(node, projects, processManager, debugSessions, debugConfigStorage, "run"),
+    )),
+    vscode.commands.registerCommand("tiangzDeveloperTools.debugProcess", (node?: ProjectNode) => runCommand(
+      () => launchProcess(node, projects, processManager, debugSessions, debugConfigStorage, "debug"),
+    )),
+    vscode.commands.registerCommand("tiangzDeveloperTools.attachProcess", (node?: ProjectNode) => runCommand(
+      () => attachProcess(node, projects, processManager, debugSessions),
+    )),
+    vscode.commands.registerCommand("tiangzDeveloperTools.stopProcess", (node?: ProjectNode) => runCommand(
+      () => stopProcess(node, projects, processManager),
+    )),
+    vscode.commands.registerCommand("tiangzDeveloperTools.runMachine", (node?: ProjectNode) => runCommand(
+      () => launchMachine(node, projects, processManager),
+    )),
+    vscode.commands.registerCommand("tiangzDeveloperTools.stopMachine", (node?: ProjectNode) => runCommand(
+      () => stopMachine(node, projects, processManager),
+    )),
+    vscode.commands.registerCommand("tiangzDeveloperTools.restartProcess", (node?: ProjectNode) => runCommand(
+      () => restartProcess(node, projects, processManager, debugSessions, debugConfigStorage),
+    )),
+    vscode.commands.registerCommand("tiangzDeveloperTools.stopAllProcesses", () => runCommand(
+      () => processManager.stopAll(),
+    )),
+    vscode.debug.onDidStartDebugSession((session) => {
+      const key = debugProcessKey(session);
+      if (key) debugSessions.set(key, session);
+    }),
+    vscode.debug.onDidTerminateDebugSession((session) => {
+      const key = debugProcessKey(session);
+      if (key && debugSessions.get(key) === session) debugSessions.delete(key);
+    }),
     {
       dispose: () => {
         if (refreshTimer) clearTimeout(refreshTimer);
@@ -133,6 +182,207 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   );
   await client.start();
   await refresh();
+}
+
+type SelectedProcess = { readonly project: IndexedProject; readonly process: ProcessConfigModel };
+interface ProcessQuickPickItem extends vscode.QuickPickItem {
+  readonly project: IndexedProject;
+  readonly process: ProcessConfigModel;
+}
+
+async function launchProcess(
+  node: ProjectNode | undefined,
+  projects: readonly IndexedProject[],
+  manager: TiangZProcessManager,
+  debugSessions: ReadonlyMap<string, vscode.DebugSession>,
+  debugConfigStorage: vscode.Uri,
+  mode: "run" | "debug",
+): Promise<void> {
+  ensureTrustedWorkspace();
+  const selected = await selectProcess(node, projects);
+  if (!selected) return;
+  const { project, process } = selected;
+  if (mode === "run") {
+    const configUri = vscode.Uri.joinPath(project.folder.uri, ...process.relativePath.split("/"));
+    await manager.launch({ folder: project.folder, process, configUri, mode: "run" });
+    return;
+  }
+  const existing = manager.getStatus(project.folder.uri.toString(), process.relativePath);
+  if (existing?.state === "running") {
+    if (existing.mode !== "debug" || !existing.debug) {
+      throw new Error(`${process.name} 正在普通模式运行；请先停止，再使用“调试 Process”启动`);
+    }
+    if (debugSessions.has(existing.key)) {
+      void vscode.window.showInformationMessage(`${process.name} 已经附加调试器`);
+      return;
+    }
+    await attachDebugger(project.folder, process, existing.debug, existing.key);
+    return;
+  }
+  const spec = await prepareDebugLaunch(project.folder, process, debugConfigStorage);
+  try {
+    await manager.launch(spec);
+  } catch (error) {
+    if (spec.cleanupConfigUri) await vscode.workspace.fs.delete(spec.cleanupConfigUri).then(undefined, () => undefined);
+    throw error;
+  }
+  const status = await manager.waitUntilRunning(project.folder.uri.toString(), process.relativePath);
+  if (!spec.debug) throw new Error(`${process.name} 没有 Inspector 配置`);
+  const attached = await attachDebugger(project.folder, process, spec.debug, status.key);
+  if (!attached) throw new Error(`VS Code 未能附加到 ${process.name} Inspector`);
+}
+
+async function attachProcess(
+  node: ProjectNode | undefined,
+  projects: readonly IndexedProject[],
+  manager: TiangZProcessManager,
+  debugSessions: ReadonlyMap<string, vscode.DebugSession>,
+): Promise<void> {
+  ensureTrustedWorkspace();
+  const selected = await selectProcess(node, projects);
+  if (!selected) return;
+  const status = manager.getStatus(selected.project.folder.uri.toString(), selected.process.relativePath);
+  if (!status || status.state !== "running") throw new Error(`${selected.process.name} 当前没有运行`);
+  if (!status.debug) throw new Error(`${selected.process.name} 不是以调试模式启动的`);
+  if (debugSessions.has(status.key)) {
+    void vscode.window.showInformationMessage(`${selected.process.name} 已经附加调试器`);
+    return;
+  }
+  const attached = await attachDebugger(selected.project.folder, selected.process, status.debug, status.key);
+  if (!attached) throw new Error(`VS Code 未能附加到 ${selected.process.name} Inspector`);
+}
+
+async function stopProcess(
+  node: ProjectNode | undefined,
+  projects: readonly IndexedProject[],
+  manager: TiangZProcessManager,
+): Promise<void> {
+  const selected = await selectProcess(node, projects, true, manager);
+  if (!selected) return;
+  await manager.stop(selected.project.folder.uri.toString(), selected.process.relativePath);
+}
+
+async function launchMachine(
+  node: ProjectNode | undefined,
+  projects: readonly IndexedProject[],
+  manager: TiangZProcessManager,
+): Promise<void> {
+  ensureTrustedWorkspace();
+  const selected = await selectMachine(node, projects);
+  if (!selected) return;
+  const processPaths = new Set(resolveMachineProcessPaths(selected.machine));
+  const processes = selected.project.snapshot.processes.filter((process) => processPaths.has(process.relativePath));
+  if (processes.length !== processPaths.size) {
+    const missing = [...processPaths].filter((relativePath) => !processes.some((process) => process.relativePath === relativePath));
+    throw new Error(`StartMachine 引用的 Process 配置未找到：${missing.join("、")}`);
+  }
+  await manager.launchMany(processes.map((process) => ({
+    folder: selected.project.folder,
+    process,
+    configUri: vscode.Uri.joinPath(selected.project.folder.uri, ...process.relativePath.split("/")),
+    mode: "run" as const,
+  })));
+}
+
+async function stopMachine(
+  node: ProjectNode | undefined,
+  projects: readonly IndexedProject[],
+  manager: TiangZProcessManager,
+): Promise<void> {
+  const selected = await selectMachine(node, projects);
+  if (!selected) return;
+  const processPaths = resolveMachineProcessPaths(selected.machine);
+  await Promise.all(processPaths.map((relativePath) => manager.stop(selected.project.folder.uri.toString(), relativePath)));
+}
+
+async function restartProcess(
+  node: ProjectNode | undefined,
+  projects: readonly IndexedProject[],
+  manager: TiangZProcessManager,
+  debugSessions: ReadonlyMap<string, vscode.DebugSession>,
+  debugConfigStorage: vscode.Uri,
+): Promise<void> {
+  const selected = await selectProcess(node, projects);
+  if (!selected) return;
+  const rootUri = selected.project.folder.uri.toString();
+  const status = manager.getStatus(rootUri, selected.process.relativePath);
+  const mode = status?.mode ?? "run";
+  if (status && ["starting", "running", "stopping"].includes(status.state)) {
+    await manager.stop(rootUri, selected.process.relativePath);
+    await manager.waitUntilStopped(rootUri, selected.process.relativePath);
+  }
+  await launchProcess(
+    {
+      label: selected.process.name,
+      icon: "server-process",
+      rootUri,
+      process: selected.process,
+      children: [],
+    },
+    projects,
+    manager,
+    debugSessions,
+    debugConfigStorage,
+    mode,
+  );
+}
+
+async function selectProcess(
+  node: ProjectNode | undefined,
+  projects: readonly IndexedProject[],
+  runningOnly = false,
+  manager?: TiangZProcessManager,
+): Promise<SelectedProcess | undefined> {
+  if (node?.process && node.rootUri) {
+    const project = projects.find((candidate) => candidate.folder.uri.toString() === node.rootUri);
+    if (project) return { project, process: node.process };
+  }
+  const choices: ProcessQuickPickItem[] = projects.flatMap((project) => project.snapshot.processes.flatMap((process) => {
+    const status = manager?.getStatus(project.folder.uri.toString(), process.relativePath);
+    if (runningOnly && (!status || !["starting", "running", "stopping"].includes(status.state))) return [];
+    return [{
+      label: process.name,
+      description: `${process.environment} / ${process.relativePath}`,
+      ...(status ? { detail: `${status.state}${status.pid ? ` / PID ${status.pid}` : ""}` } : {}),
+      project,
+      process,
+    } satisfies ProcessQuickPickItem];
+  }));
+  const selected = await vscode.window.showQuickPick(choices, {
+    placeHolder: runningOnly ? "选择要停止的 TiangZ Process" : "选择 TiangZ Process",
+  });
+  return selected ? { project: selected.project, process: selected.process } : undefined;
+}
+
+async function selectMachine(node: ProjectNode | undefined, projects: readonly IndexedProject[]) {
+  if (node?.machine && node.rootUri) {
+    const project = projects.find((candidate) => candidate.folder.uri.toString() === node.rootUri);
+    if (project) return { project, machine: node.machine };
+  }
+  const choices = projects.flatMap((project) => project.snapshot.machines.map((machine) => ({
+    label: machine.name,
+    description: `${machine.environment} / ${machine.innerIp}`,
+    project,
+    machine,
+  })));
+  return vscode.window.showQuickPick(choices, { placeHolder: "选择要启动的 StartMachine 机器配置" });
+}
+
+function ensureTrustedWorkspace(): void {
+  if (!vscode.workspace.isTrusted) throw new Error("启动或调试 TiangZ 前，请先信任当前工作区");
+}
+
+async function runCommand(action: () => Promise<void>): Promise<void> {
+  try {
+    await action();
+  } catch (error) {
+    void vscode.window.showErrorMessage(`TiangZ：${errorMessage(error)}`);
+  }
+}
+
+function debugProcessKey(session: vscode.DebugSession): string | undefined {
+  const value: unknown = session.configuration.__tiangzProcessKey;
+  return typeof value === "string" ? value : undefined;
 }
 
 export async function deactivate(): Promise<void> {
@@ -204,5 +454,9 @@ async function showServerStats(): Promise<void> {
 }
 
 function showError(error: unknown): void {
-  void vscode.window.showErrorMessage(`TiangZ 工程索引失败：${error instanceof Error ? error.message : String(error)}`);
+  void vscode.window.showErrorMessage(`TiangZ 工程索引失败：${errorMessage(error)}`);
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }

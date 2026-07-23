@@ -19,11 +19,11 @@
 
 ## Phase 2：配置启动与调试
 
-- [ ] 选择环境和 Process 配置
-- [ ] 通过 VS Code Task 启动单个 Process 或 StartMachine
-- [ ] 附加 Deno/V8 Inspector
-- [ ] 显示 PID、端口、Inspector 地址和退出状态
-- [ ] 保证进程生命周期由 VS Code Task 管理
+- [x] 选择环境和 Process 配置
+- [x] 通过 VS Code Task 启动单个 Process 或 StartMachine
+- [x] 附加 Deno/V8 Inspector
+- [x] 显示 PID、端口、Inspector 地址和退出状态
+- [x] 保证进程生命周期由 VS Code Task 管理
 
 ## Phase 3：工程规则
 

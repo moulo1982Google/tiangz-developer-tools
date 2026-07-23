@@ -2,23 +2,32 @@ import * as vscode from "vscode";
 
 import type {
   HandlerModel,
+  MachineConfigModel,
+  ProcessConfigModel,
   ProjectDiagnostic,
   ProtocolDescriptorModel,
   SourceLocation,
   TiangZProjectSnapshot,
   TypeDeclarationModel,
-} from "../../packages/project-core/src/index.js";
+} from "../../packages/project-core/src/types.js";
 
 import type { IndexedProject } from "./projectIndex.js";
+import { processKey, type ManagedProcessStatus } from "./processManager.js";
 
 export class ProjectTreeProvider implements vscode.TreeDataProvider<ProjectNode> {
   private readonly changed = new vscode.EventEmitter<ProjectNode | undefined>();
   private projects: readonly IndexedProject[] = [];
+  private processStatuses: ReadonlyMap<string, ManagedProcessStatus> = new Map();
 
   readonly onDidChangeTreeData = this.changed.event;
 
   setProjects(projects: readonly IndexedProject[]): void {
     this.projects = projects;
+    this.changed.fire(undefined);
+  }
+
+  setProcessStatuses(statuses: ReadonlyMap<string, ManagedProcessStatus>): void {
+    this.processStatuses = statuses;
     this.changed.fire(undefined);
   }
 
@@ -32,8 +41,9 @@ export class ProjectTreeProvider implements vscode.TreeDataProvider<ProjectNode>
     if (element.description !== undefined) item.description = element.description;
     item.tooltip = element.tooltip ?? element.label;
     item.iconPath = new vscode.ThemeIcon(element.icon);
+    if (element.contextValue) item.contextValue = element.contextValue;
+    else if (element.location) item.contextValue = "tiangzLocation";
     if (element.location) {
-      item.contextValue = "tiangzLocation";
       item.command = {
         command: "tiangzDeveloperTools.openLocation",
         title: "打开声明",
@@ -45,7 +55,7 @@ export class ProjectTreeProvider implements vscode.TreeDataProvider<ProjectNode>
 
   getChildren(element?: ProjectNode): ProjectNode[] {
     if (element) return [...element.children];
-    return this.projects.map((project) => projectNode(project, this.projects.length > 1));
+    return this.projects.map((project) => projectNode(project, this.projects.length > 1, this.processStatuses));
   }
 }
 
@@ -55,13 +65,22 @@ export interface ProjectNode {
   readonly tooltip?: string;
   readonly icon: string;
   readonly location?: SourceLocation;
+  readonly contextValue?: string;
+  readonly rootUri?: string;
+  readonly process?: ProcessConfigModel;
+  readonly machine?: MachineConfigModel;
   readonly children: readonly ProjectNode[];
 }
 
-function projectNode(project: IndexedProject, showFolder: boolean): ProjectNode {
+function projectNode(
+  project: IndexedProject,
+  showFolder: boolean,
+  statuses: ReadonlyMap<string, ManagedProcessStatus>,
+): ProjectNode {
   const snapshot = project.snapshot;
+  const rootUri = project.folder.uri.toString();
   const categories = [
-    environmentsNode(snapshot),
+    environmentsNode(snapshot, rootUri, statuses),
     declarationsNode("入口 Scene", "server-process", "entryScene", snapshot),
     declarationsNode("动态 Scene", "symbol-namespace", "scene", snapshot),
     declarationsNode("Actor", "symbol-class", "actor", snapshot),
@@ -116,7 +135,11 @@ function protocolNode(protocol: ProtocolDescriptorModel, handlers: readonly Hand
   };
 }
 
-function environmentsNode(snapshot: TiangZProjectSnapshot): ProjectNode {
+function environmentsNode(
+  snapshot: TiangZProjectSnapshot,
+  rootUri: string,
+  statuses: ReadonlyMap<string, ManagedProcessStatus>,
+): ProjectNode {
   return {
     label: "运行环境",
     description: String(snapshot.environments.length),
@@ -131,28 +154,78 @@ function environmentsNode(snapshot: TiangZProjectSnapshot): ProjectNode {
           tooltip: `Machine ${machine.name}\n${machine.processes.join("\n")}`,
           icon: "vm",
           location: { relativePath: machine.relativePath, line: 0, character: 0 },
-          children: machine.processes.map((process) => ({
-            label: process,
-            icon: "file-code",
-            children: [],
-          })),
+          contextValue: "tiangzMachineConfig",
+          rootUri,
+          machine,
+          children: resolveMachineProcesses(snapshot, machine).map((process) => processNode(process, rootUri, statuses)),
         })),
-        ...snapshot.processes.filter((process) => process.environment === environment).map((process) => ({
-          label: process.name,
-          description: process.relativePath.split("/").at(-1) ?? process.relativePath,
-          icon: "server-process",
-          location: { relativePath: process.relativePath, line: 0, character: 0 },
-          children: process.scenes.map((scene) => ({
-            label: scene.name,
-            description: `${scene.sceneType}${scene.ip ? `  ${scene.ip}:${scene.port ?? 0}` : ""}`,
-            icon: "symbol-namespace",
-            location: { relativePath: process.relativePath, line: 0, character: 0 },
-            children: [],
-          })),
-        })),
+        ...snapshot.processes.filter((process) => process.environment === environment)
+          .map((process) => processNode(process, rootUri, statuses)),
       ],
     })),
   };
+}
+
+function processNode(
+  process: ProcessConfigModel,
+  rootUri: string,
+  statuses: ReadonlyMap<string, ManagedProcessStatus>,
+): ProjectNode {
+  const status = statuses.get(processKey(rootUri, process.relativePath));
+  const file = process.relativePath.split("/").at(-1) ?? process.relativePath;
+  return {
+    label: process.name,
+    description: status ? `${statusLabel(status)} / ${file}` : file,
+    tooltip: [
+      process.relativePath,
+      status ? `状态：${status.state}` : "状态：未启动",
+      status?.pid ? `PID：${status.pid}` : undefined,
+      status?.inspector ? `Inspector：${status.inspector}` : process.debug ? `Inspector：${process.debug.inspectorIp}:${process.debug.inspectorPort}` : undefined,
+    ].filter(Boolean).join("\n"),
+    icon: processIcon(status),
+    location: { relativePath: process.relativePath, line: 0, character: 0 },
+    contextValue: status && (status.state === "starting" || status.state === "running" || status.state === "stopping")
+      ? "tiangzRunningProcessConfig"
+      : "tiangzStoppedProcessConfig",
+    rootUri,
+    process,
+    children: process.scenes.map((scene) => ({
+      label: scene.name,
+      description: `${scene.sceneType}${scene.ip ? `  ${scene.ip}:${scene.port ?? 0}` : ""}`,
+      icon: "symbol-namespace",
+      location: { relativePath: process.relativePath, line: 0, character: 0 },
+      children: [],
+    })),
+  };
+}
+
+function resolveMachineProcesses(
+  snapshot: TiangZProjectSnapshot,
+  machine: MachineConfigModel,
+): ProcessConfigModel[] {
+  const directory = machine.relativePath.slice(0, machine.relativePath.lastIndexOf("/") + 1);
+  return machine.processes.flatMap((file) => {
+    const relativePath = `${directory}${file.replaceAll("\\", "/")}`.replace(/\/+/g, "/");
+    const process = snapshot.processes.find((candidate) => candidate.relativePath === relativePath);
+    return process ? [process] : [];
+  });
+}
+
+function statusLabel(status: ManagedProcessStatus): string {
+  switch (status.state) {
+    case "starting": return "正在启动";
+    case "running": return status.pid ? `运行中 PID ${status.pid}` : "运行中";
+    case "stopping": return "正在停止";
+    case "failed": return `失败 (${status.exitCode ?? "?"})`;
+    case "stopped": return "已停止";
+  }
+}
+
+function processIcon(status: ManagedProcessStatus | undefined): string {
+  if (!status || status.state === "stopped") return "server-process";
+  if (status.state === "failed") return "error";
+  if (status.state === "starting" || status.state === "stopping") return "loading~spin";
+  return status.mode === "debug" ? "debug-alt" : "play-circle";
 }
 
 function declarationsNode(

@@ -53,8 +53,16 @@ export interface ProcessConfigModel {
   readonly environment: string;
   readonly name: string;
   readonly relativePath: string;
+  readonly debug?: ProcessDebugConfigModel;
   readonly scenes: readonly SceneConfigModel[];
   readonly knownScenes: readonly SceneConfigModel[];
+}
+
+export interface ProcessDebugConfigModel {
+  readonly inspectorIp: string;
+  readonly inspectorPort: number;
+  readonly breakOnStart: boolean;
+  readonly allowRemote: boolean;
 }
 
 export interface MachineConfigModel {

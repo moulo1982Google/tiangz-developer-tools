@@ -9,5 +9,9 @@
 - Handler 和协议 CodeLens。
 - 重复 Handler、缺失 Handler、RPC 类型不匹配与配置错误诊断。
 - “TiangZ：显示语言服务器状态”性能观测命令。
+- 从工程树运行、调试、停止和重启 Process。
+- StartMachine 进程组展开为独立 VS Code Task。
+- 自动构建、等待 V8 Inspector 并附加 TypeScript 调试器。
+- 无 `process.debug` 时生成临时配置，不修改正式 JSON。
 
 详细说明与路线图位于项目仓库根目录。

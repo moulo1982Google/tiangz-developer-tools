@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { analyzeTiangZProject } from "../dist/index.js";
+import {
+  analyzeTiangZProject,
+  createDebugConfig,
+  resolveMachineProcessPaths,
+} from "../dist/index.js";
 
 const sources = [
   {
@@ -57,6 +61,57 @@ test("builds one project snapshot from configs and TypeScript decorators", () =>
     { kind: "actorMessage", target: "PlayerUnit", descriptor: "MapMessages.Move" },
   ]);
   assert.deepEqual(snapshot.diagnostics, []);
+});
+
+test("indexes Process Inspector configuration", () => {
+  const snapshot = analyzeTiangZProject([{
+    relativePath: "configs/local/debug.json",
+    text: JSON.stringify({
+      process: {
+        name: "debug",
+        debug: {
+          inspectorIp: "127.0.0.1",
+          inspectorPort: 9231,
+          breakOnStart: true,
+          allowRemote: false,
+        },
+      },
+      scenes: [],
+    }),
+  }]);
+  assert.deepEqual(snapshot.processes[0].debug, {
+    inspectorIp: "127.0.0.1",
+    inspectorPort: 9231,
+    breakOnStart: true,
+    allowRemote: false,
+  });
+});
+
+test("creates an isolated debug config without changing business fields", () => {
+  const generated = createDebugConfig(JSON.stringify({
+    process: { name: "map1", game: { fixedUpdateMs: 50 } },
+    scenes: [{ name: "map_1", sceneType: "MapHost" }],
+  }), {
+    inspectorIp: "127.0.0.1",
+    inspectorPort: 9235,
+    breakOnStart: true,
+    allowRemote: false,
+  });
+  const value = JSON.parse(generated.text);
+  assert.equal(value.process.name, "map1");
+  assert.equal(value.process.game.fixedUpdateMs, 50);
+  assert.deepEqual(value.process.debug, generated.debug);
+  assert.equal(value.scenes[0].sceneType, "MapHost");
+});
+
+test("resolves StartMachine process files relative to its environment", () => {
+  assert.deepEqual(resolveMachineProcessPaths({
+    environment: "local",
+    name: "local",
+    innerIp: "127.0.0.1",
+    processes: ["login1.json", "groups/map1.json"],
+    relativePath: "configs/local/StartMachine.json",
+  }), ["configs/local/login1.json", "configs/local/groups/map1.json"]);
 });
 
 test("reports config references that cannot be resolved", () => {
