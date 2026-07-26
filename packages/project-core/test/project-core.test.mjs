@@ -449,8 +449,8 @@ import { NativeUnitRef } from "../generated/model/native/NativeUnitRef";`,
     },
     {
       relativePath: "app/hotfix/PlayerHandler.ts",
-      text: `import { Player } from "../model/Player";
-import { GameErrCode } from "../game/protocol/GameErrCode";`,
+      text: `import { Player, GameErrCode } from "#tiangz/model";
+import { helper } from "./helper";`,
     },
     {
       relativePath: "app/demo/LoginScene.ts",
@@ -459,25 +459,52 @@ import { LoginProtocol } from "../generated/model/server/demo/protocol/rpcs";
 import { GameErrCode } from "../game/protocol/GameErrCode";`,
     },
     {
-      relativePath: "app/generated/hotfix/scenes.ts",
-      text: `import "../../demo/LoginScene";
-import "../../hotfix/PlayerHandler";`,
+      relativePath: "app/generated/hotfix/handlers.ts",
+      text: `import "../../hotfix/PlayerHandler";`,
+    },
+    {
+      relativePath: "app/generated/bootstrap/scenes.ts",
+      text: `import "../../model/LoginScene";
+import { registerKnownRpcs } from "../../core/protocol/rpc";`,
+    },
+    {
+      relativePath: "app/model/main.ts",
+      text: `import "../generated/bootstrap/scenes";`,
+    },
+    {
+      relativePath: "app/hotfix/main.ts",
+      text: `import "../generated/hotfix/handlers";`,
     },
     {
       relativePath: "app/main.ts",
-      text: `import "./generated/hotfix/scenes";
-import "./demo/LoginScene";`,
+      text: `import "./model/main";
+import "./hotfix/main";`,
     },
   ]);
   assert.deepEqual(snapshot.diagnostics, []);
 });
 
-test("allows benchmark code to exercise business APIs and named composition entries", () => {
+test("requires Hotfix to enter stable code through the model package", () => {
   const snapshot = analyzeTiangZProject([
     {
-      relativePath: "app/bench/handlers/StateSyncBenchHandler.ts",
-      text: `import { PlayerUnit } from "../../demo/map/PlayerUnit";
-import { StateSyncBenchProtocol } from "../../generated/model/server/bench/protocol/rpcs";`,
+      relativePath: "app/hotfix/demo/LoginHandler.ts",
+      text: `import { Entity } from "../../core/runtime";
+import { LoginScene } from "../../model/demo/LoginScene";
+import { something } from "some-package";`,
+    },
+  ]);
+  assert.deepEqual(snapshot.diagnostics.map((diagnostic) => diagnostic.code), [
+    "tiangz.architecture.invalid-dependency",
+    "tiangz.architecture.invalid-dependency",
+    "tiangz.architecture.invalid-dependency",
+  ]);
+});
+
+test("allows benchmark Hotfix to exercise the stable Model API", () => {
+  const snapshot = analyzeTiangZProject([
+    {
+      relativePath: "app/hotfix/bench/handlers/StateSyncBenchHandler.ts",
+      text: `import { PlayerUnit, StateSyncBenchProtocol } from "#tiangz/model";`,
     },
     {
       relativePath: "app/main.bench.ts",
@@ -544,6 +571,24 @@ test("marks scene imports stale only when the selected file set changes", () => 
     { relativePath: "codegen.manifest.json", text: JSON.stringify(stale) },
     scene,
   ]).diagnostics.map((diagnostic) => diagnostic.code), ["tiangz.generated.stale"]);
+});
+
+test("tracks Hotfix patches and benchmark handlers as generated selections", () => {
+  const files = [
+    { relativePath: "app/hotfix/demo/LoginHotfix.ts", text: "export class LoginHotfix {}" },
+    { relativePath: "app/hotfix/bench/handlers/PingHandler.ts", text: "export class PingHandler {}" },
+  ];
+  const manifest = generatedManifest({
+    selections: [
+      { kind: "hotfix-patch", roots: ["app/hotfix/demo"], paths: [files[0].relativePath] },
+      { kind: "bench-handler", roots: ["app/hotfix/bench"], paths: [files[1].relativePath] },
+    ],
+  });
+  const snapshot = analyzeTiangZProject([
+    { relativePath: "codegen.manifest.json", text: JSON.stringify(manifest) },
+    ...files,
+  ]);
+  assert.deepEqual(snapshot.diagnostics, []);
 });
 
 function generatedManifest(overrides) {

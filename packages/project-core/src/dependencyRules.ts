@@ -8,6 +8,7 @@ type DependencyLayer =
   | "root"
   | "core"
   | "generatedModel"
+  | "generatedBootstrap"
   | "generatedHotfix"
   | "model"
   | "hotfix"
@@ -33,7 +34,7 @@ export function validateTypeScriptDependencies(
 
   function visit(node: ts.Node): void {
     const specifier = moduleSpecifier(node);
-    if (specifier && specifier.text.startsWith(".") && !seenOffsets.has(specifier.getStart(sourceFile))) {
+    if (specifier && !seenOffsets.has(specifier.getStart(sourceFile))) {
       seenOffsets.add(specifier.getStart(sourceFile));
       validateSpecifier(specifier);
     }
@@ -41,14 +42,24 @@ export function validateTypeScriptDependencies(
   }
 
   function validateSpecifier(specifier: ts.StringLiteralLike): void {
+    if (!specifier.text.startsWith(".")) {
+      if (source!.layer === "hotfix" && specifier.text !== "#tiangz/model") {
+        reportInvalid(specifier, `Hotfix 只能通过 #tiangz/model 导入稳定层：${relativePath} -> ${specifier.text}`);
+      }
+      return;
+    }
     const targetPath = resolveRelativeModule(relativePath, specifier.text);
     const target = classifyModule(targetPath);
     if (!target || dependencyAllowed(source!, target)) return;
+    reportInvalid(specifier, `${source!.label} 不允许依赖 ${target.label}：${relativePath} -> ${targetPath}`);
+  }
+
+  function reportInvalid(specifier: ts.StringLiteralLike, message: string): void {
     const position = sourceFile.getLineAndCharacterOfPosition(specifier.getStart(sourceFile) + 1);
     diagnostics.push({
       code: "tiangz.architecture.invalid-dependency",
       severity: "error",
-      message: `${source!.label} 不允许依赖 ${target.label}：${relativePath} -> ${targetPath}`,
+      message,
       location: { relativePath, line: position.line, character: position.character },
     });
   }
@@ -80,6 +91,7 @@ function classifyModule(relativePath: string): ClassifiedModule | undefined {
   const top = segments[1];
   if (top === "core") return { layer: "core", label: "Core" };
   if (top === "generated") {
+    if (segments[2] === "bootstrap") return { layer: "generatedBootstrap", label: "Generated/Bootstrap" };
     if (segments[2] === "model") return { layer: "generatedModel", label: "Generated/Model" };
     if (segments[2] === "hotfix") return { layer: "generatedHotfix", label: "Generated/Hotfix" };
     return { layer: "generatedModel", label: "Generated" };
@@ -92,21 +104,26 @@ function classifyModule(relativePath: string): ClassifiedModule | undefined {
 }
 
 function dependencyAllowed(source: ClassifiedModule, target: ClassifiedModule): boolean {
-  if (source.layer === "root" || source.layer === "generatedHotfix") return true;
-  if (target.layer === "root" || target.layer === "generatedHotfix") return false;
+  if (source.layer === "root") return true;
+  if (target.layer === "root") return false;
   switch (source.layer) {
     case "core":
       return target.layer === "core";
     case "generatedModel":
       return target.layer === "core" || target.layer === "generatedModel";
+    case "generatedBootstrap":
+      return target.layer === "core" || target.layer === "generatedModel"
+        || target.layer === "model" || target.layer === "generatedBootstrap";
     case "model":
-      return target.layer === "core" || target.layer === "generatedModel" || target.layer === "model";
+      return target.layer === "core" || target.layer === "generatedModel"
+        || target.layer === "generatedBootstrap" || target.layer === "model";
     case "game":
       return target.layer === "core" || target.layer === "generatedModel"
         || target.layer === "model" || target.layer === "game";
     case "hotfix":
-      return target.layer === "core" || target.layer === "generatedModel"
-        || target.layer === "model" || target.layer === "game" || target.layer === "hotfix";
+      return target.layer === "hotfix" || target.layer === "generatedHotfix";
+    case "generatedHotfix":
+      return target.layer === "hotfix" || target.layer === "generatedHotfix";
     case "benchmark":
       return target.layer === "core" || target.layer === "generatedModel"
         || target.layer === "model" || target.layer === "game" || target.layer === "hotfix"

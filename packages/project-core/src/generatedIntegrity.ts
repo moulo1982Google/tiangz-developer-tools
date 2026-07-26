@@ -139,8 +139,11 @@ function matchesSelection(kind: string, candidate: string): boolean {
       return file !== "index.ts" && file.endsWith(".ts") && parent === "scenes"
         && !segments.includes("generated");
     case "handler":
+    case "bench-handler":
       return file !== "index.ts" && file.endsWith(".ts") && segments.includes("handlers")
         && !segments.includes("generated");
+    case "hotfix-patch":
+      return file.endsWith("Hotfix.ts") && !segments.includes("generated");
     case "protocol-rpc":
       return file === "rpcs.ts" && parent === "protocol";
     case "protocol-message":
