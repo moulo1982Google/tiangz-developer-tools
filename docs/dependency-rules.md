@@ -14,9 +14,12 @@
 | `app/game` | Core、Generated/Model、Model、Game |
 | `app/hotfix` | Core、Generated/Model、Model、Game、Hotfix |
 | `app/demo` | Core、Generated/Model、Model、Game、Demo |
+| `app/bench` | Core、Generated/Model、Model、Game、Hotfix、Bench、所有业务目录 |
 | 其他 `app/<game>` 业务目录 | Core、Generated/Model、Model、Game、同名业务目录 |
 
-`app/main.ts` 是应用组合入口，允许导入所有层。`app/generated/hotfix` 是 codegen 生成的 Scene/Handler 组合入口，也允许导入业务模块；它不等同于纯数据代码 `app/generated/model`。
+`app/main.ts`、`app/main.bench.ts` 等 `app/main.<用途>.ts` 是应用组合入口，允许导入所有层。`app/bench` 只用于压测和自测，可以调用真实业务 API；业务目录不能反向依赖 Bench。
+
+`app/generated/hotfix` 是 codegen 生成的 Scene/Handler 组合入口，也允许导入业务模块；它不等同于纯数据代码 `app/generated/model`。
 
 ## 检查范围
 

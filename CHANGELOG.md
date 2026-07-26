@@ -1,5 +1,10 @@
 # 更新记录
 
+## 0.8.1
+
+- 将 `app/bench` 识别为非生产基准测试层，允许它复用真实业务 API，同时继续禁止业务代码反向依赖 Bench。
+- 将 `app/main.<用途>.ts` 识别为应用组合入口，支持独立的正式、Bench 和调试装配入口。
+
 ## 0.8.0
 
 - 识别 `sessionRpcHandler`、`sessionMessageHandler`、`unitRpcHandler` 和 `unitMessageHandler`。

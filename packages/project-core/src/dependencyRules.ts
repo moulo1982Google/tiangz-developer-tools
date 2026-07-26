@@ -12,6 +12,7 @@ type DependencyLayer =
   | "model"
   | "hotfix"
   | "game"
+  | "benchmark"
   | "business";
 
 interface ClassifiedModule {
@@ -71,7 +72,9 @@ function resolveRelativeModule(importer: string, specifier: string): string {
 
 function classifyModule(relativePath: string): ClassifiedModule | undefined {
   const normalized = relativePath.replaceAll("\\", "/").replace(/^\.\//, "");
-  if (normalized === "app/main.ts") return { layer: "root", label: "应用入口" };
+  if (/^app\/main(?:\.[^/]+)?\.ts$/.test(normalized)) {
+    return { layer: "root", label: "应用组合入口" };
+  }
   const segments = normalized.split("/");
   if (segments[0] !== "app" || !segments[1]) return undefined;
   const top = segments[1];
@@ -84,6 +87,7 @@ function classifyModule(relativePath: string): ClassifiedModule | undefined {
   if (top === "model") return { layer: "model", label: "Model" };
   if (top === "hotfix") return { layer: "hotfix", label: "Hotfix" };
   if (top === "game") return { layer: "game", label: "Game" };
+  if (top === "bench") return { layer: "benchmark", label: "Bench" };
   return { layer: "business", domain: top, label: `业务目录 ${top}` };
 }
 
@@ -103,6 +107,10 @@ function dependencyAllowed(source: ClassifiedModule, target: ClassifiedModule): 
     case "hotfix":
       return target.layer === "core" || target.layer === "generatedModel"
         || target.layer === "model" || target.layer === "game" || target.layer === "hotfix";
+    case "benchmark":
+      return target.layer === "core" || target.layer === "generatedModel"
+        || target.layer === "model" || target.layer === "game" || target.layer === "hotfix"
+        || target.layer === "benchmark" || target.layer === "business";
     case "business":
       return target.layer === "core" || target.layer === "generatedModel"
         || target.layer === "model" || target.layer === "game"

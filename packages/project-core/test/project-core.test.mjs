@@ -472,6 +472,22 @@ import "./demo/LoginScene";`,
   assert.deepEqual(snapshot.diagnostics, []);
 });
 
+test("allows benchmark code to exercise business APIs and named composition entries", () => {
+  const snapshot = analyzeTiangZProject([
+    {
+      relativePath: "app/bench/handlers/StateSyncBenchHandler.ts",
+      text: `import { PlayerUnit } from "../../demo/map/PlayerUnit";
+import { StateSyncBenchProtocol } from "../../generated/model/server/bench/protocol/rpcs";`,
+    },
+    {
+      relativePath: "app/main.bench.ts",
+      text: `import "./bench/bootstrap";
+import "./main";`,
+    },
+  ]);
+  assert.deepEqual(snapshot.diagnostics, []);
+});
+
 test("accepts generated files that match the codegen manifest", () => {
   const input = "message Login {}\n";
   const output = "// generated\nexport interface Login {}\n";
