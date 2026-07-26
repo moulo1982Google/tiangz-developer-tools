@@ -83,7 +83,16 @@ export interface TypeDeclarationModel {
   readonly location: SourceLocation;
 }
 
-export type HandlerKind = "rpc" | "message" | "actorRpc" | "actorMessage" | "actorMethod";
+export type HandlerKind =
+  | "rpc"
+  | "message"
+  | "sessionRpc"
+  | "sessionMessage"
+  | "unitRpc"
+  | "unitMessage"
+  | "actorRpc"
+  | "actorMessage"
+  | "actorMethod";
 
 export interface HandlerModel {
   readonly kind: HandlerKind;

@@ -1,10 +1,10 @@
 # TiangZ Developer Tools
 
-在 VS Code 资源管理器中显示 TiangZ 的 Environment、Machine、Process、Scene、Actor、Component、协议与 Handler。
+在 VS Code 资源管理器中显示 TiangZ 的 Environment、Machine、Process、Scene、Session、Unit、Component、协议与 Handler。
 
 支持：
 
-- Handler 与生成协议双向跳转。
+- Scene、Session、Unit Handler 与生成协议双向跳转，并兼容旧版 Actor Handler。
 - RPC、Message、MsgCode 与 Handler 中文 Hover。
 - Handler 和协议 CodeLens。
 - 重复 Handler、缺失 Handler、RPC 类型不匹配、工程依赖方向与配置错误诊断。

@@ -5,7 +5,7 @@
 - [x] 建立独立仓库结构
 - [x] 实现不依赖 VS Code 的 project-core
 - [x] 解析 Environment、Machine、Process 和入口 Scene 配置
-- [x] 使用 TypeScript Compiler API 索引 Scene、Actor、Component 与 Handler
+- [x] 使用 TypeScript Compiler API 索引 Scene、Session、Unit、Component 与 Handler
 - [x] 增加 TiangZ 工程树、源码跳转和 Problems
 - [x] 使用真实 TiangZ 工程完成零诊断验收
 

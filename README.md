@@ -2,14 +2,14 @@
 
 TiangZ 框架的工程模型、静态检查与 VS Code 开发工具。
 
-这个插件不替代 TypeScript，也不负责 `.native` 语言支持。它关注 TiangZ 特有的 Process、Scene、Actor、Component、Handler 和启动配置之间的关系。
+这个插件不替代 TypeScript，也不负责 `.native` 语言支持。它关注 TiangZ 特有的 Process、Scene、Session、Unit、Component、Handler 和启动配置之间的关系。
 
 ## 当前能力
 
 - 扫描 `configs/<环境>/**/*.json`，建立 Environment、Machine、Process 和入口 Scene 模型。
-- 使用 TypeScript Compiler API 识别 `@entryScene`、`@scene`、`@actor` 和 `@component`。
+- 使用 TypeScript Compiler API 识别 `@entryScene`、`@scene`、`@component`，并兼容旧版 `@actor`。
 - 从服务端生成文件索引 RPC、Message、Request、Response、MsgCode 与 Descriptor。
-- 识别类 Handler、`@rpc`、`@message`、`@handler` 方法和 `registerActorRpc` 显式注册。
+- 识别 Scene、Session、Unit 类 Handler，以及 `@rpc`、`@message`、`@handler` 方法；兼容旧版 Actor Handler 与 `registerActorRpc`。
 - 在资源管理器中显示“TiangZ 工程”树，并可跳转到配置或声明。
 - 在 Handler 与协议之间双向导航，并提供中文 Hover 和 CodeLens。
 - 检查配置引用、重复或缺失 Handler，以及 RPC 消息类型不匹配。
@@ -33,7 +33,7 @@ npm run check
 npm run package:extension
 ```
 
-生成的 VSIX 位于 `dist/tiangz-developer-tools-0.7.0.vsix`。
+生成的 VSIX 位于 `dist/tiangz-developer-tools-0.8.0.vsix`。
 
 检查任意 TiangZ 工程：
 

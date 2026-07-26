@@ -33,6 +33,10 @@ const CLASS_DECORATORS = new Map<string, DeclarationKind>([
 const CLASS_HANDLER_DECORATORS = new Map<string, HandlerKind>([
   ["rpcHandler", "rpc"],
   ["messageHandler", "message"],
+  ["sessionRpcHandler", "sessionRpc"],
+  ["sessionMessageHandler", "sessionMessage"],
+  ["unitRpcHandler", "unitRpc"],
+  ["unitMessageHandler", "unitMessage"],
   ["actorRpcHandler", "actorRpc"],
   ["actorMessageHandler", "actorMessage"],
 ]);
@@ -436,10 +440,16 @@ function projectHandlerSignature(
     for (const type of clause.types) {
       const name = expressionName(type.expression);
       const args = type.typeArguments?.map((argument) => argument.getText(sourceFile)) ?? [];
-      if (name === "SceneRpcHandler" || name === "ActorRpcHandler") {
+      if (name === "SessionRpcHandler") {
+        return compactSignature({ requestType: args[2], responseType: args[3] });
+      }
+      if (name === "SceneRpcHandler" || name === "UnitRpcHandler" || name === "ActorRpcHandler") {
         return compactSignature({ requestType: args[1], responseType: args[2] });
       }
-      if (name === "SceneMessageHandler" || name === "ActorMessageHandler") {
+      if (name === "SessionMessageHandler") {
+        return compactSignature({ messageType: args[2] });
+      }
+      if (name === "SceneMessageHandler" || name === "UnitMessageHandler" || name === "ActorMessageHandler") {
         return compactSignature({ messageType: args[1] });
       }
     }

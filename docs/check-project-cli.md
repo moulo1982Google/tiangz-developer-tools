@@ -7,7 +7,7 @@
 检查范围包括：
 
 - Process、StartMachine 与入口 Scene 配置引用。
-- Scene、Actor、Component、协议与 Handler 关系。
+- Scene、Session、Unit、Component、协议与 Handler 关系。
 - Core、Generated、Model、Hotfix、Demo 等目录的依赖方向。
 - `codegen.manifest.json` 记录的生成文件完整性。
 

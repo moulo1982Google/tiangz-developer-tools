@@ -76,8 +76,8 @@ export class MapComponent extends Component {}
   {
     relativePath: "app/demo/handlers/C2M_MoveHandler.ts",
     text: `
-@actorMessageHandler(PlayerUnit, MapMessages.Move)
-export class C2M_MoveHandler implements ActorMessageHandler<PlayerUnit, C2M_Move> {}
+@unitMessageHandler(PlayerUnit, MapMessages.Move)
+export class C2M_MoveHandler implements UnitMessageHandler<PlayerUnit, C2M_Move> {}
 `,
   },
 ];
@@ -94,7 +94,7 @@ test("builds one project snapshot from configs and TypeScript decorators", () =>
     { kind: "entryScene", name: "MapHostScene", runtimeType: "MapHost" },
   ]);
   assert.deepEqual(snapshot.handlers.map(({ kind, target, descriptor }) => ({ kind, target, descriptor })), [
-    { kind: "actorMessage", target: "PlayerUnit", descriptor: "MapMessages.Move" },
+    { kind: "unitMessage", target: "PlayerUnit", descriptor: "MapMessages.Move" },
   ]);
   assert.deepEqual(snapshot.diagnostics, []);
 });
@@ -266,6 +266,88 @@ class PingHandler implements SceneMessageHandler<GateScene, C2G_Ping> {}`,
       requestCode: 10001,
       responseCode: 10002,
       msgcode: undefined,
+    },
+  ]);
+  assert.deepEqual(snapshot.diagnostics, []);
+});
+
+test("indexes Scene, Session and Unit handlers with their generic signatures", () => {
+  const snapshot = analyzeTiangZProject([
+    {
+      relativePath: "app/generated/model/server/demo/protocol/rpcs.ts",
+      text: `export const DemoProtocol = {
+        Login: defineRpc<C2S_Login, S2C_Login>({ name: "Demo.Login" }),
+        Probe: defineRpc<C2M_Probe, M2C_Probe>({ name: "Demo.Probe" }),
+      };`,
+    },
+    {
+      relativePath: "app/generated/model/server/demo/protocol/messageDescriptors.ts",
+      text: `export const DemoMessages = {
+        Ping: defineMessage<C2G_Ping>({ name: "Demo.Ping" }),
+        Move: defineMessage<C2M_Move>({ name: "Demo.Move" }),
+      };`,
+    },
+    {
+      relativePath: "app/demo/handlers/LoginHandler.ts",
+      text: `@sessionRpcHandler(LoginScene, DemoProtocol.Login)
+        class LoginHandler implements SessionRpcHandler<LoginScene, LoginSession, C2S_Login, S2C_Login> {}`,
+    },
+    {
+      relativePath: "app/demo/handlers/PingHandler.ts",
+      text: `@sessionMessageHandler(GateScene, DemoMessages.Ping)
+        class PingHandler implements SessionMessageHandler<GateScene, GateSession, C2G_Ping> {}`,
+    },
+    {
+      relativePath: "app/demo/handlers/ProbeHandler.ts",
+      text: `@unitRpcHandler(PlayerUnit, DemoProtocol.Probe)
+        class ProbeHandler implements UnitRpcHandler<PlayerUnit, C2M_Probe, M2C_Probe> {}`,
+    },
+    {
+      relativePath: "app/demo/handlers/MoveHandler.ts",
+      text: `@unitMessageHandler(PlayerUnit, DemoMessages.Move)
+        class MoveHandler implements UnitMessageHandler<PlayerUnit, C2M_Move> {}`,
+    },
+  ]);
+
+  assert.deepEqual(snapshot.handlers.map((handler) => ({
+    kind: handler.kind,
+    target: handler.target,
+    descriptor: handler.descriptor,
+    requestType: handler.requestType,
+    responseType: handler.responseType,
+    messageType: handler.messageType,
+  })), [
+    {
+      kind: "sessionRpc",
+      target: "LoginScene",
+      descriptor: "DemoProtocol.Login",
+      requestType: "C2S_Login",
+      responseType: "S2C_Login",
+      messageType: undefined,
+    },
+    {
+      kind: "unitMessage",
+      target: "PlayerUnit",
+      descriptor: "DemoMessages.Move",
+      requestType: undefined,
+      responseType: undefined,
+      messageType: "C2M_Move",
+    },
+    {
+      kind: "sessionMessage",
+      target: "GateScene",
+      descriptor: "DemoMessages.Ping",
+      requestType: undefined,
+      responseType: undefined,
+      messageType: "C2G_Ping",
+    },
+    {
+      kind: "unitRpc",
+      target: "PlayerUnit",
+      descriptor: "DemoProtocol.Probe",
+      requestType: "C2M_Probe",
+      responseType: "M2C_Probe",
+      messageType: undefined,
     },
   ]);
   assert.deepEqual(snapshot.diagnostics, []);

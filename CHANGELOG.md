@@ -1,5 +1,12 @@
 # 更新记录
 
+## 0.8.0
+
+- 识别 `sessionRpcHandler`、`sessionMessageHandler`、`unitRpcHandler` 和 `unitMessageHandler`。
+- 按 Scene、Session、Unit Handler 的真实泛型位置校验 Request、Response 与 Message 类型。
+- 修复 TiangZ 切换到 Scene、Session、Unit 消息模型后协议被误报为“没有找到 Handler”的问题。
+- 保留旧版 Actor Handler 与 `registerActorRpc` 的兼容识别。
+
 ## 0.7.0
 
 - 在工程树增加“代码生成”，显示 Manifest 中声明的生成器及其真实命令。

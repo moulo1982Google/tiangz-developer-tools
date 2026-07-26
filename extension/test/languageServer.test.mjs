@@ -23,8 +23,8 @@ test("provides protocol diagnostics, navigation, Hover and CodeLens", async () =
     responseCode: MsgCode.S2C_Login,
   }),
 };`;
-    const handlerText = `@rpcHandler(LoginScene, LoginProtocol.Login)
-export class LoginHandler implements SceneRpcHandler<LoginScene, C2S_Login, S2C_Login> {}`;
+    const handlerText = `@sessionRpcHandler(LoginScene, LoginProtocol.Login)
+export class LoginHandler implements SessionRpcHandler<LoginScene, LoginSession, C2S_Login, S2C_Login> {}`;
 
     const initialized = await rpc.request("initialize", {
       processId: null,
@@ -107,8 +107,8 @@ export class LoginHandler implements SceneRpcHandler<LoginScene, C2S_Login, S2C_
       (params) => params.uri === handlerUri
         && params.diagnostics.some((diagnostic) => diagnostic.code === "tiangz.handler.duplicate"),
     );
-    open(rpc, brokenUri, `@rpcHandler(LoginScene, LoginProtocol.Login)
-class BrokenLoginHandler implements SceneRpcHandler<LoginScene, WrongRequest, S2C_Login> {}`, 1);
+    open(rpc, brokenUri, `@sessionRpcHandler(LoginScene, LoginProtocol.Login)
+class BrokenLoginHandler implements SessionRpcHandler<LoginScene, LoginSession, WrongRequest, S2C_Login> {}`, 1);
     assert.deepEqual((await brokenDiagnostics).diagnostics.map((diagnostic) => diagnostic.code), [
       "tiangz.handler.rpc-type-mismatch",
     ]);

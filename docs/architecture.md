@@ -21,9 +21,9 @@ codegen.manifest.json -----/                         |
 ## 当前索引
 
 - 配置：Environment、StartMachine、Process、`scenes`、`knownScenes`。
-- 类型：EntryScene、动态 Scene、Actor、Component。
+- 类型：EntryScene、动态 Scene、Session、Unit、Component；兼容旧版 Actor 声明。
 - 协议：服务端生成的 RPC、Message、Request、Response、MsgCode 与 Descriptor。
-- Handler：`rpcHandler`、`messageHandler`、`actorRpcHandler`、`actorMessageHandler`、`rpc`、`message`、`handler` 和 `registerActorRpc`。
+- Handler：Scene 使用 `rpcHandler`、`messageHandler`；Session 使用 `sessionRpcHandler`、`sessionMessageHandler`；Unit 使用 `unitRpcHandler`、`unitMessageHandler`；同时识别 `rpc`、`message`、`handler` 和旧版 Actor API。
 - 诊断：配置错误、重复入口 Scene、重复或缺失 Handler、RPC 类型不匹配、工程依赖方向、JSON/TypeScript 语法错误。
 
 工程依赖规则由 project-core 基于 TypeScript AST 检查，`Generated/Model` 与负责装配业务的 `Generated/Hotfix` 使用不同边界。完整矩阵见[工程依赖规则](dependency-rules.md)。
