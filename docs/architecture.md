@@ -24,7 +24,7 @@ codegen.manifest.json -----/                         |
 - 类型：EntryScene、动态 Scene、Session、Unit、Component；兼容旧版 Actor 声明。
 - 协议：服务端生成的 RPC、Message、Request、Response、MsgCode 与 Descriptor。
 - Handler：Scene 使用 `rpcHandler`、`messageHandler`；Session 使用 `sessionRpcHandler`、`sessionMessageHandler`；Unit 使用 `unitRpcHandler`、`unitMessageHandler`；同时识别 `rpc`、`message`、`handler` 和旧版 Actor API。
-- 诊断：配置错误、重复入口 Scene、重复或缺失 Handler、RPC 类型不匹配、工程依赖方向、JSON/TypeScript 语法错误。
+- 诊断：配置错误、重复入口 Scene、重复或缺失 Handler、RPC 类型不匹配、工程依赖方向、Component 子对象所有权、JSON/TypeScript 语法错误。
 
 工程依赖规则由 project-core 基于 TypeScript AST 检查，`Generated/Model` 与负责装配业务的 `Generated/Hotfix` 使用不同边界。完整矩阵见[工程依赖规则](dependency-rules.md)。
 
@@ -41,6 +41,8 @@ Generated 完整性由根目录 `codegen.manifest.json` 描述。Language Server
 - project-core 只在分析期间持有 TypeScript AST，返回模型不保存 AST 或完整源码。
 - project-core 只在独立 Language Server 中运行；VS Code Extension Host 仅接收序列化快照，不加载 TypeScript 编译器。
 - “TiangZ：显示语言服务器状态”可查看缓存文件、协议、Handler、校验耗时和堆内存。
+
+Component 所有权检查只分析单文件语法：公共可变 `Map/Set` 和生产 Handler 导入 `Native*Ref` 产生黄色建议；它不创建 TypeChecker，不追踪跨文件数据流，也不限制所属 System 或 Bench 使用 Native 句柄。
 
 工作区增长到需要增量索引时，缓存应放在独立索引层，并以 URI 和文档版本为键；不能把缓存塞进语义模型。
 

@@ -553,7 +553,7 @@ test("does not warn for nullable fields, discriminated unions, dictionaries or o
 export class PlayerUnit extends Unit {
   target: Unit | null = null;
   state: IdleState | MovingState = { kind: "idle" };
-  values = new Map<number, number>();
+  protected values = new Map<number, number>();
 }`,
     },
     {
@@ -562,6 +562,39 @@ export class PlayerUnit extends Unit {
     },
   ]);
   assert.deepEqual(snapshot.diagnostics, []);
+});
+
+test("warns when a Component exposes a mutable collection or a Handler imports Native Ref", () => {
+  const snapshot = analyzeTiangZProject([
+    {
+      relativePath: "app/model/game/item/ItemComponent.ts",
+      text: `@component()
+export class ItemComponent extends Component {
+  readonly items = new Map<number, ItemView>();
+  protected readonly index = new Map<number, number>();
+}`,
+    },
+    {
+      relativePath: "app/hotfix/game/handlers/C2M_UseItemHandler.ts",
+      text: `import { ItemComponent, NativeItemRef, type ItemView } from "#tiangz/model";
+export class C2M_UseItemHandler {}`,
+    },
+    {
+      relativePath: "app/hotfix/game/item/ItemComponentSystem.ts",
+      text: `import { NativeItemRef } from "#tiangz/model";
+@systemFor(ItemComponent)
+export class ItemComponentSystem extends ItemComponent {}`,
+    },
+  ]);
+  const ownershipWarnings = snapshot.diagnostics.filter(
+    (diagnostic) => diagnostic.code.startsWith("tiangz.architecture.component-public")
+      || diagnostic.code === "tiangz.architecture.native-ref-in-handler",
+  );
+  assert.deepEqual(ownershipWarnings.map((diagnostic) => diagnostic.code).sort(), [
+    "tiangz.architecture.component-public-collection",
+    "tiangz.architecture.native-ref-in-handler",
+  ].sort());
+  assert.ok(ownershipWarnings.every((diagnostic) => diagnostic.severity === "warning"));
 });
 
 test("accepts generated files that match the codegen manifest", () => {

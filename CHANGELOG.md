@@ -1,5 +1,11 @@
 # 更新记录
 
+## 0.11.1
+
+- 增加 Component 公共可变 `Map/Set` 黄色诊断，避免业务绕过集合所有者。
+- 增加生产 Handler 直接导入 `Native*Ref` 黄色诊断，引导通过 Component 领域方法修改子对象。
+- 两项检查只使用单文件语法树，排除 Bench 并允许所属 System 直接使用 Native 句柄。
+
 ## 0.10.0
 
 - 增加“启动/停止源码开发模式”，复用主工程`npm run dev`与Watcher Reload，不在插件中复制构建状态机。

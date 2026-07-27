@@ -179,12 +179,94 @@ function analyzeTypeScript(
   analyzeGeneratedProtocol(sourceFile, source.relativePath, messageTypes, msgcodes, protocols);
   validateTypeScriptDependencies(sourceFile, source.relativePath, diagnostics);
   validateRuntimeShapeStability(sourceFile, source.relativePath, diagnostics);
+  validateOwnedComponentBoundaries(sourceFile, source.relativePath, diagnostics);
   visit(sourceFile);
 
   function visit(node: ts.Node): void {
     if (ts.isClassDeclaration(node) && node.name) analyzeClass(sourceFile, source.relativePath, node, declarations, handlers);
     ts.forEachChild(node, visit);
   }
+}
+
+/**
+ * 检查Component集合所有权和Handler的Native句柄边界，只报告可以从单文件语法确定的问题。
+ * Checks Component collection ownership and Handler Native-handle boundaries,
+ * reporting only issues that can be determined from single-file syntax.
+ */
+function validateOwnedComponentBoundaries(
+  sourceFile: ts.SourceFile,
+  relativePath: string,
+  diagnostics: ProjectDiagnostic[],
+): void {
+  if (!isBusinessRuntimeSource(relativePath)) return;
+
+  if (normalizePath(relativePath).includes("/handlers/")) {
+    for (const statement of sourceFile.statements) {
+      if (!ts.isImportDeclaration(statement) || !statement.importClause?.namedBindings
+        || !ts.isNamedImports(statement.importClause.namedBindings)) continue;
+      for (const element of statement.importClause.namedBindings.elements) {
+        const importedName = element.propertyName?.text ?? element.name.text;
+        if (!/^Native[A-Za-z0-9_]*Ref$/.test(importedName)) continue;
+        report(
+          element.name,
+          "tiangz.architecture.native-ref-in-handler",
+          "Handler不应直接依赖可变Native Ref；请通过所属Component执行修改，查询时使用只读View或Snapshot。",
+        );
+      }
+    }
+  }
+
+  for (const statement of sourceFile.statements) {
+    if (!ts.isClassDeclaration(statement) || !isComponentClass(statement)) continue;
+    for (const member of statement.members) {
+      if (!ts.isPropertyDeclaration(member) || !member.name || hasStaticModifier(member)) continue;
+      if (hasNonPublicModifier(member) || !isMutableCollectionProperty(member)) continue;
+      report(
+        member.name,
+        "tiangz.architecture.component-public-collection",
+        "Component不应公开可变Map或Set；请将集合设为private/protected，并通过查询和领域方法维护所有权。",
+      );
+    }
+  }
+
+  function report(node: ts.Node, code: string, message: string): void {
+    diagnostics.push({
+      code,
+      severity: "warning",
+      message,
+      location: sourceLocation(sourceFile, node.getStart(sourceFile), relativePath),
+    });
+  }
+}
+
+/** 判断类是否为Component状态或其System行为类。 / Determines whether a class is a Component state or System behavior class. */
+function isComponentClass(declaration: ts.ClassDeclaration): boolean {
+  if (decoratorsOf(declaration).some((decorator) => {
+    const call = decoratorCall(decorator);
+    return expressionName(call?.expression ?? decorator.expression) === "component";
+  })) return true;
+  const heritage = declaration.heritageClauses?.find((clause) => clause.token === ts.SyntaxKind.ExtendsKeyword);
+  return /Component$/.test(heritage?.types[0]?.expression.getText() ?? "");
+}
+
+/** 检查字段是否声明或初始化为可变Map/Set。 / Checks whether a field is declared or initialized as a mutable Map/Set. */
+function isMutableCollectionProperty(property: ts.PropertyDeclaration): boolean {
+  if (property.type && ts.isTypeReferenceNode(property.type)) {
+    const name = property.type.typeName.getText();
+    if (name === "Map" || name === "Set") return true;
+  }
+  return !!property.initializer
+    && ts.isNewExpression(property.initializer)
+    && (property.initializer.expression.getText() === "Map" || property.initializer.expression.getText() === "Set");
+}
+
+/** private/protected字段由Component内部拥有，不属于公共可变集合。 / Private/protected fields remain owned by the Component and are not public mutable collections. */
+function hasNonPublicModifier(node: ts.Node): boolean {
+  if (!ts.canHaveModifiers(node)) return false;
+  return ts.getModifiers(node)?.some(
+    (modifier) => modifier.kind === ts.SyntaxKind.PrivateKeyword
+      || modifier.kind === ts.SyntaxKind.ProtectedKeyword,
+  ) ?? false;
 }
 
 /**
