@@ -622,15 +622,17 @@ test("marks scene imports stale only when the selected file set changes", () => 
   ]).diagnostics.map((diagnostic) => diagnostic.code), ["tiangz.generated.stale"]);
 });
 
-test("tracks Hotfix patches and benchmark handlers as generated selections", () => {
+test("tracks Hotfix patches, Systems, and benchmark handlers as generated selections", () => {
   const files = [
     { relativePath: "app/hotfix/demo/LoginHotfix.ts", text: "export class LoginHotfix {}" },
+    { relativePath: "app/hotfix/demo/PlayerUnitSystem.ts", text: "export class PlayerUnitSystem {}" },
     { relativePath: "app/hotfix/bench/handlers/PingHandler.ts", text: "export class PingHandler {}" },
   ];
   const manifest = generatedManifest({
     selections: [
       { kind: "hotfix-patch", roots: ["app/hotfix/demo"], paths: [files[0].relativePath] },
-      { kind: "bench-handler", roots: ["app/hotfix/bench"], paths: [files[1].relativePath] },
+      { kind: "hotfix-system", roots: ["app/hotfix/demo"], paths: [files[1].relativePath] },
+      { kind: "bench-handler", roots: ["app/hotfix/bench"], paths: [files[2].relativePath] },
     ],
   });
   const snapshot = analyzeTiangZProject([

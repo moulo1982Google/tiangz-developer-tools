@@ -255,7 +255,14 @@ function isBusinessRuntimeSource(relativePath: string): boolean {
 
 /** 识别承载长期状态或其 Hotfix 行为的 Scene、Entity、Unit、Actor 与 Component 类。 / Recognizes Scene, Entity, Unit, Actor, and Component classes that carry long-lived state or Hotfix behavior. */
 function isRuntimeStateClass(declaration: ts.ClassDeclaration): boolean {
-  const runtimeDecorators = new Set(["entryScene", "scene", "actor", "component", "hotfixFor"]);
+  const runtimeDecorators = new Set([
+    "entryScene",
+    "scene",
+    "actor",
+    "component",
+    "hotfixFor",
+    "systemFor",
+  ]);
   if (decoratorsOf(declaration).some((decorator) => {
     const call = decoratorCall(decorator);
     return runtimeDecorators.has(expressionName(call?.expression ?? decorator.expression));

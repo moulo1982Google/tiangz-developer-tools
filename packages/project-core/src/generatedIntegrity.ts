@@ -144,6 +144,8 @@ function matchesSelection(kind: string, candidate: string): boolean {
         && !segments.includes("generated");
     case "hotfix-patch":
       return file.endsWith("Hotfix.ts") && !segments.includes("generated");
+    case "hotfix-system":
+      return file.endsWith("System.ts") && !segments.includes("generated");
     case "protocol-rpc":
       return file === "rpcs.ts" && parent === "protocol";
     case "protocol-message":
