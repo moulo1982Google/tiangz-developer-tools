@@ -515,6 +515,55 @@ import "./main";`,
   assert.deepEqual(snapshot.diagnostics, []);
 });
 
+test("warns only for high-confidence runtime shape instability", () => {
+  const snapshot = analyzeTiangZProject([
+    {
+      relativePath: "app/model/game/PlayerUnit.ts",
+      text: `@component()
+export class PlayerUnit extends Unit {
+  unsafe: any = 0;
+  mixed: number | string = 0;
+  target: Unit | null = null;
+  mode: "idle" | "moving" = "idle";
+
+  mutate(): void {
+    delete this.mixed;
+    (this as any).lateField = 1;
+  }
+}`,
+    },
+    {
+      relativePath: "app/hotfix/bench/IntentionalBench.ts",
+      text: `export class IntentionalBench extends Unit { value: any = 1; }`,
+    },
+  ]);
+  const warnings = snapshot.diagnostics.filter(
+    (diagnostic) => diagnostic.code === "tiangz.performance.unstable-shape",
+  );
+  assert.equal(warnings.length, 4);
+  assert.ok(warnings.every((diagnostic) => diagnostic.severity === "warning"));
+  assert.deepEqual(warnings.map((diagnostic) => diagnostic.location.line), [2, 3, 8, 9]);
+});
+
+test("does not warn for nullable fields, discriminated unions, dictionaries or ordinary DTOs", () => {
+  const snapshot = analyzeTiangZProject([
+    {
+      relativePath: "app/model/game/PlayerUnit.ts",
+      text: `@component()
+export class PlayerUnit extends Unit {
+  target: Unit | null = null;
+  state: IdleState | MovingState = { kind: "idle" };
+  values = new Map<number, number>();
+}`,
+    },
+    {
+      relativePath: "app/model/game/Messages.ts",
+      text: `export interface FlexibleDto { value: number | string; payload: any; }`,
+    },
+  ]);
+  assert.deepEqual(snapshot.diagnostics, []);
+});
+
 test("accepts generated files that match the codegen manifest", () => {
   const input = "message Login {}\n";
   const output = "// generated\nexport interface Login {}\n";

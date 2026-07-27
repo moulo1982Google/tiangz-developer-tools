@@ -1,5 +1,11 @@
 # 更新记录
 
+## 0.10.0
+
+- 增加“启动/停止源码开发模式”，复用主工程`npm run dev`与Watcher Reload，不在插件中复制构建状态机。
+- 增加`tiangz.performance.unstable-shape`黄色诊断，检查运行时状态类中的显式`any`、跨基本存储种类联合字段、`delete`字段和`as any`属性写入。
+- 性能诊断只使用语法树并排除Bench、普通DTO、空值联合、判别联合和显式字典，避免创建第二套工程级TypeScript Program。
+
 ## 0.8.1
 
 - 将 `app/bench` 识别为非生产基准测试层，允许它复用真实业务 API，同时继续禁止业务代码反向依赖 Bench。

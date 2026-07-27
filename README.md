@@ -24,6 +24,8 @@ TiangZ 框架的工程模型、静态检查与 VS Code 开发工具。
 - 自动执行 TypeScript/Cargo 构建，直接运行 Cargo 产出的 TiangZ executable。
 - 自动等待 V8 Inspector 并附加 VS Code JavaScript Debugger，无需维护 `launch.json`。
 - 原配置没有 `process.debug` 时，在 VS Code 工作区存储中生成并清理临时调试配置。
+- 从 StartMachine 启动主工程统一的源码开发模式，保存 Hotfix 后自动构建不可变候选并 Reload。
+- 对运行时状态类中显式 `any`、跨基本存储种类联合字段、`delete` 字段和 `as any` 属性写入提供黄色性能建议。
 
 ## 本地开发
 
@@ -33,7 +35,7 @@ npm run check
 npm run package:extension
 ```
 
-生成的 VSIX 位于 `dist/tiangz-developer-tools-0.8.0.vsix`。
+生成的 VSIX 位于 `dist/tiangz-developer-tools-0.10.0.vsix`。
 
 检查任意 TiangZ 工程：
 
@@ -69,6 +71,10 @@ node dist/tiangz-check-project.cjs E:\gitee\TiangZ --format json
 - “停止/重启 Process”：管理对应的进程树和调试会话。
 
 右键 Machine 可一次启动或停止该 Machine 引用的全部 Process。插件只在可信工作区执行构建和进程命令。
+
+右键 StartMachine 选择“启动源码开发模式”，会调用主工程的`npm run dev -- <StartMachine.json>`。插件不自行实现第二套监听器或Reload状态机；停止任务时由主工程开发宿主请求Watcher优雅停机。
+
+`tiangz.performance.unstable-shape`只扫描Model/Hotfix业务运行时类并排除Bench。它是可选的黄色性能建议，不会让普通`tiangz-check-project`失败；CI只有显式传入`--warnings-as-errors`时才提升警告。
 
 详细说明见 [运行与调试](docs/run-and-debug.md)。
 

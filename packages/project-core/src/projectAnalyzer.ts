@@ -178,12 +178,157 @@ function analyzeTypeScript(
   }
   analyzeGeneratedProtocol(sourceFile, source.relativePath, messageTypes, msgcodes, protocols);
   validateTypeScriptDependencies(sourceFile, source.relativePath, diagnostics);
+  validateRuntimeShapeStability(sourceFile, source.relativePath, diagnostics);
   visit(sourceFile);
 
   function visit(node: ts.Node): void {
     if (ts.isClassDeclaration(node) && node.name) analyzeClass(sourceFile, source.relativePath, node, declarations, handlers);
     ts.forEachChild(node, visit);
   }
+}
+
+/**
+ * 对业务运行时类执行高置信、低噪音的 V8 对象形状检查。
+ * Performs high-confidence, low-noise V8 object-shape checks for business runtime classes.
+ *
+ * 这里只使用语法树，不创建第二套 TypeScript Program，避免语言服务器重复占用工程级类型检查内存。
+ * This intentionally uses syntax only and does not create a second TypeScript Program, avoiding duplicate project-wide type-checker memory in the language server.
+ */
+function validateRuntimeShapeStability(
+  sourceFile: ts.SourceFile,
+  relativePath: string,
+  diagnostics: ProjectDiagnostic[],
+): void {
+  if (!isBusinessRuntimeSource(relativePath)) return;
+  visit(sourceFile, false);
+
+  function visit(node: ts.Node, insideRuntimeClass: boolean): void {
+    const runtimeClass = ts.isClassDeclaration(node) && isRuntimeStateClass(node);
+    const inside = insideRuntimeClass || runtimeClass;
+    if (runtimeClass) validateRuntimeClassFields(node);
+    if (inside && ts.isDeleteExpression(node)) report(
+      node,
+      "delete 会改变对象字段布局，可能让 V8 热点属性访问退化；请保留字段并写入稳定的空值。",
+    );
+    if (inside && ts.isBinaryExpression(node) && isAssignmentOperator(node.operatorToken.kind)
+      && writesThroughAnyAssertion(node.left)) {
+      report(
+        node.left,
+        "通过 as any 写入字段会绕过类型约束，并可能改变对象形状或字段存储种类。",
+      );
+    }
+    ts.forEachChild(node, (child) => visit(child, inside));
+  }
+
+  function validateRuntimeClassFields(declaration: ts.ClassDeclaration): void {
+    for (const member of declaration.members) {
+      if (!ts.isPropertyDeclaration(member) || !member.name || hasStaticModifier(member)) continue;
+      if (member.type && containsAnyType(member.type)) {
+        report(member.name, "运行时状态字段不应使用 any；请声明稳定类型，动态键值请显式使用 Map 或 Record。");
+        continue;
+      }
+      if (member.type && hasMixedPrimitiveUnion(member.type)) {
+        report(
+          member.name,
+          "该字段的联合类型跨越不同运行时存储种类，热点写入可能反复改变 V8 类型反馈；建议拆分字段。",
+        );
+      }
+    }
+  }
+
+  function report(node: ts.Node, message: string): void {
+    diagnostics.push({
+      code: "tiangz.performance.unstable-shape",
+      severity: "warning",
+      message,
+      location: sourceLocation(sourceFile, node.getStart(sourceFile), relativePath),
+    });
+  }
+}
+
+/** 判断源码是否属于需要性能建议的业务 Model/Hotfix，压测代码不参与。 / Determines whether a source belongs to business Model/Hotfix code that should receive performance advice; benchmark code is excluded. */
+function isBusinessRuntimeSource(relativePath: string): boolean {
+  const normalized = normalizePath(relativePath);
+  return (normalized.startsWith("app/model/") || normalized.startsWith("app/hotfix/"))
+    && !normalized.includes("/bench/");
+}
+
+/** 识别承载长期状态或其 Hotfix 行为的 Scene、Entity、Unit、Actor 与 Component 类。 / Recognizes Scene, Entity, Unit, Actor, and Component classes that carry long-lived state or Hotfix behavior. */
+function isRuntimeStateClass(declaration: ts.ClassDeclaration): boolean {
+  const runtimeDecorators = new Set(["entryScene", "scene", "actor", "component", "hotfixFor"]);
+  if (decoratorsOf(declaration).some((decorator) => {
+    const call = decoratorCall(decorator);
+    return runtimeDecorators.has(expressionName(call?.expression ?? decorator.expression));
+  })) return true;
+  const heritage = declaration.heritageClauses?.find((clause) => clause.token === ts.SyntaxKind.ExtendsKeyword);
+  const baseName = heritage?.types[0]?.expression.getText() ?? "";
+  return /(?:Scene|Entity|Unit|Actor|Component)$/.test(baseName);
+}
+
+/** 检查字段类型树中是否显式包含 any。 / Checks whether a field type tree explicitly contains any. */
+function containsAnyType(type: ts.TypeNode): boolean {
+  if (type.kind === ts.SyntaxKind.AnyKeyword) return true;
+  if (ts.isUnionTypeNode(type) || ts.isIntersectionTypeNode(type)) return type.types.some(containsAnyType);
+  if (ts.isArrayTypeNode(type)) return containsAnyType(type.elementType);
+  if (ts.isParenthesizedTypeNode(type)) return containsAnyType(type.type);
+  return false;
+}
+
+/** 只将 number/string/boolean/bigint/symbol 之间的跨种类联合视为不稳定，保留空值和业务判别联合。 / Treats only unions across number/string/boolean/bigint/symbol as unstable, preserving nullability and business discriminated unions. */
+function hasMixedPrimitiveUnion(type: ts.TypeNode): boolean {
+  if (!ts.isUnionTypeNode(type)) return false;
+  const categories = new Set(type.types.map(primitiveTypeCategory).filter((value): value is string => value !== undefined));
+  return categories.size > 1;
+}
+
+/** 将语法类型映射为 V8 可观察的基本存储种类。 / Maps a syntax type to a primitive storage category observable by V8. */
+function primitiveTypeCategory(type: ts.TypeNode): string | undefined {
+  switch (type.kind) {
+    case ts.SyntaxKind.NumberKeyword: return "number";
+    case ts.SyntaxKind.StringKeyword: return "string";
+    case ts.SyntaxKind.BooleanKeyword: return "boolean";
+    case ts.SyntaxKind.BigIntKeyword: return "bigint";
+    case ts.SyntaxKind.SymbolKeyword: return "symbol";
+    default:
+      if (!ts.isLiteralTypeNode(type)) return undefined;
+      if (ts.isStringLiteral(type.literal)) return "string";
+      if (ts.isNumericLiteral(type.literal)) return "number";
+      if (type.literal.kind === ts.SyntaxKind.TrueKeyword || type.literal.kind === ts.SyntaxKind.FalseKeyword) return "boolean";
+      return undefined;
+  }
+}
+
+/** 判断赋值左侧的接收者是否通过 any 断言绕开了字段声明。 / Determines whether an assignment receiver bypasses field declarations through an any assertion. */
+function writesThroughAnyAssertion(left: ts.Expression): boolean {
+  const target = unwrapParentheses(left);
+  if (!ts.isPropertyAccessExpression(target) && !ts.isElementAccessExpression(target)) return false;
+  return hasAnyAssertion(target.expression);
+}
+
+/** 穿透括号寻找接收者上的 as any 或 <any> 断言。 / Walks through parentheses to find an as any or <any> assertion on the receiver. */
+function hasAnyAssertion(expression: ts.Expression): boolean {
+  let current = expression;
+  while (ts.isParenthesizedExpression(current)) current = current.expression;
+  return (ts.isAsExpression(current) || ts.isTypeAssertionExpression(current))
+    && current.type.kind === ts.SyntaxKind.AnyKeyword;
+}
+
+/** 去除赋值目标外层括号但保留类型断言供后续检查。 / Removes outer assignment-target parentheses while preserving type assertions for later inspection. */
+function unwrapParentheses(expression: ts.Expression): ts.Expression {
+  let current = expression;
+  while (ts.isParenthesizedExpression(current)) current = current.expression;
+  return current;
+}
+
+/** 判断运算符是否会写回左值。 / Determines whether an operator writes back to its left-hand side. */
+function isAssignmentOperator(kind: ts.SyntaxKind): boolean {
+  return kind >= ts.SyntaxKind.FirstAssignment && kind <= ts.SyntaxKind.LastAssignment;
+}
+
+/** 判断类字段是否为静态字段，静态注册表不属于实例对象形状。 / Determines whether a class field is static; static registries do not affect instance object shape. */
+function hasStaticModifier(node: ts.Node): boolean {
+  return ts.canHaveModifiers(node)
+    && (ts.getModifiers(node)?.some((modifier) => modifier.kind === ts.SyntaxKind.StaticKeyword) ?? false);
 }
 
 function analyzeClass(

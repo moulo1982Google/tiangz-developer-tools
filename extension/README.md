@@ -16,5 +16,7 @@
 - StartMachine 进程组展开为独立 VS Code Task。
 - 自动构建、等待 V8 Inspector 并附加 TypeScript 调试器。
 - 无 `process.debug` 时生成临时配置，不修改正式 JSON。
+- 从 StartMachine 启动/停止源码开发模式，保存 Hotfix 后由主工程自动构建候选并 Reload。
+- 对高置信的运行时字段类型和对象形状不稳定写法发布黄色性能建议。
 
 详细说明与路线图位于项目仓库根目录。

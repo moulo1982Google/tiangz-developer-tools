@@ -16,6 +16,7 @@ import type {
 } from "../../packages/project-core/src/types.js";
 import { CodegenTaskManager, generatorLabel } from "./codegenTaskManager.js";
 import { attachDebugger, prepareDebugLaunch } from "./debugSession.js";
+import { DevSourceManager } from "./devSourceManager.js";
 import {
   discoverWorkspaceFolder,
   type DiscoveredProject,
@@ -55,6 +56,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   const tree = new ProjectTreeProvider();
   const processManager = new TiangZProcessManager(vscode.window.createOutputChannel("TiangZ 启动与构建"));
   const codegenTaskManager = new CodegenTaskManager();
+  const devSourceManager = new DevSourceManager();
   const debugSessions = new Map<string, vscode.DebugSession>();
   const view = vscode.window.createTreeView("tiangzProject", { treeDataProvider: tree, showCollapseAll: true });
   let projects: readonly IndexedProject[] = [];
@@ -142,6 +144,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     view,
     processManager,
     codegenTaskManager,
+    devSourceManager,
     processStateSubscription,
     ...watchers,
     snapshotSubscription,
@@ -183,6 +186,12 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     )),
     vscode.commands.registerCommand("tiangzDeveloperTools.runMachine", (node?: ProjectNode) => runCommand(
       () => launchMachine(node, projects, processManager),
+    )),
+    vscode.commands.registerCommand("tiangzDeveloperTools.startDevSourceMode", (node?: ProjectNode | vscode.Uri) => runCommand(
+      () => startDevSourceMode(node, projects, devSourceManager),
+    )),
+    vscode.commands.registerCommand("tiangzDeveloperTools.stopDevSourceMode", () => runCommand(
+      async () => devSourceManager.stop(),
     )),
     vscode.commands.registerCommand("tiangzDeveloperTools.stopMachine", (node?: ProjectNode) => runCommand(
       () => stopMachine(node, projects, processManager),
@@ -370,6 +379,25 @@ async function launchMachine(
     configUri: vscode.Uri.joinPath(selected.project.folder.uri, ...process.relativePath.split("/")),
     mode: "run" as const,
   })));
+}
+
+/**
+ * 通过主工程的统一开发宿主启动 Watcher，避免插件复制 Hotfix 监听和 Reload 状态机。
+ * Starts the Watcher through the main project's unified development host, avoiding duplicated Hotfix watch and Reload state machines in the extension.
+ */
+async function startDevSourceMode(
+  target: CommandTarget | undefined,
+  projects: readonly IndexedProject[],
+  manager: DevSourceManager,
+): Promise<void> {
+  ensureTrustedWorkspace();
+  const selected = await selectMachine(target, projects);
+  if (!selected) return;
+  await manager.start({
+    folder: selected.project.folder,
+    configRelativePath: selected.machine.relativePath,
+    machineName: selected.machine.name,
+  });
 }
 
 async function stopMachine(

@@ -2,7 +2,7 @@
   "name": "tiangz-developer-tools",
   "displayName": "TiangZ Developer Tools",
   "description": "TiangZ Process、Scene、协议导航、运行与 TypeScript 调试工具",
-  "version": "0.9.1",
+  "version": "0.10.0",
   "publisher": "moulo",
   "author": "moulo",
   "license": "MIT",
@@ -172,6 +172,16 @@
         "icon": "$(run-all)"
       },
       {
+        "command": "tiangzDeveloperTools.startDevSourceMode",
+        "title": "TiangZ：启动源码开发模式",
+        "icon": "$(sync)"
+      },
+      {
+        "command": "tiangzDeveloperTools.stopDevSourceMode",
+        "title": "TiangZ：停止源码开发模式",
+        "icon": "$(debug-stop)"
+      },
+      {
         "command": "tiangzDeveloperTools.stopMachine",
         "title": "TiangZ：停止 Machine 进程组",
         "icon": "$(debug-stop)"
@@ -247,6 +257,11 @@
           "group": "tiangzRun@2"
         },
         {
+          "command": "tiangzDeveloperTools.startDevSourceMode",
+          "when": "view == tiangzProject && viewItem == tiangzMachineConfig",
+          "group": "tiangzRun@3"
+        },
+        {
           "command": "tiangzDeveloperTools.runCodegen",
           "when": "view == tiangzProject && viewItem == tiangzCodegenGenerator",
           "group": "inline"
@@ -282,6 +297,11 @@
           "command": "tiangzDeveloperTools.stopMachine",
           "when": "resourceFilename == StartMachine.json",
           "group": "tiangzRun@2"
+        },
+        {
+          "command": "tiangzDeveloperTools.startDevSourceMode",
+          "when": "resourceFilename == StartMachine.json",
+          "group": "tiangzRun@3"
         },
         {
           "command": "tiangzDeveloperTools.regenerateProto",
