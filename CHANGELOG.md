@@ -1,5 +1,10 @@
 # 更新记录
 
+## 未发布
+
+- 增加Model生命周期契约诊断：`@lifecycle`声明缺少对应`@systemFor`、缺少`Awake/OnDestroy/Deserialize`或错误使用`async`时直接报错。
+- 增加`@transferable()`契约诊断，要求Model自身或对应System提供同步`CaptureTransfer/RestoreTransfer`。
+
 ## 0.13.0
 
 - 增加不依赖 VS Code 的领域设计规则库，冻结 Item、Buff、Quest、Achievement、Numeric 与自定义系统的核心语义。

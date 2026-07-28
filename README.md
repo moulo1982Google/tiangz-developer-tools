@@ -17,6 +17,7 @@ TiangZ 框架的工程模型、静态检查与 VS Code 开发工具。
 - 检查 Core、Generated/Model、Model、Hotfix、Game 与业务目录的依赖方向。
 - 根据 `codegen.manifest.json` 检测生成文件过期、缺失、遗留或被手工修改。
 - 识别 `@systemFor` 与 `*System.ts`，跟踪 TiangZ 自动生成的 Model 方法声明。
+- 校验`@lifecycle`与`@transferable()`声明，缺少System、同步生命周期方法或迁移方法时在编辑器和CI中报错。
 - 提供与 VS Code Problems 使用相同规则的 `tiangz-check-project` 命令，可直接接入 CI。
 - 从工程树、命令面板或 Proto/Native 文件右键菜单定向运行 Manifest 中的生成器。
 - 独立 Language Server 使用 150ms 防抖，不保留 TypeScript AST，并提供运行状态指标。

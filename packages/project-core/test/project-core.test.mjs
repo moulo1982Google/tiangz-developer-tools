@@ -566,6 +566,62 @@ export class PlayerUnit extends Unit {
   assert.deepEqual(snapshot.diagnostics, []);
 });
 
+test("validates declared Model lifecycle and transfer methods against Hotfix Systems", () => {
+  const incomplete = analyzeTiangZProject([
+    {
+      relativePath: "app/model/game/BuffComponent.ts",
+      text: `@component()
+@transferable()
+@lifecycle({ awake: true, destroy: true, deserialize: true })
+export class BuffComponent extends Component {}`,
+    },
+    {
+      relativePath: "app/hotfix/game/BuffComponentSystem.ts",
+      text: `@systemFor(BuffComponent)
+export class BuffComponentSystem extends BuffComponent {
+  protected override Awake(): void {}
+  async Deserialize(): Promise<void> {}
+}`,
+    },
+  ]);
+  assert.deepEqual(
+    incomplete.diagnostics
+      .filter((diagnostic) => diagnostic.code.startsWith("tiangz.lifecycle."))
+      .map((diagnostic) => diagnostic.code),
+    [
+      "tiangz.lifecycle.missing-method",
+      "tiangz.lifecycle.async-method",
+      "tiangz.lifecycle.missing-method",
+      "tiangz.lifecycle.missing-method",
+    ],
+  );
+
+  const complete = analyzeTiangZProject([
+    {
+      relativePath: "app/model/game/BuffComponent.ts",
+      text: `@component()
+@transferable()
+@lifecycle({ awake: true, destroy: true, deserialize: true })
+export class BuffComponent extends Component {}`,
+    },
+    {
+      relativePath: "app/hotfix/game/BuffComponentSystem.ts",
+      text: `@systemFor(BuffComponent)
+export class BuffComponentSystem extends BuffComponent {
+  protected override Awake(): void {}
+  protected override OnDestroy(): void {}
+  Deserialize(): void {}
+  CaptureTransfer(): number { return 1; }
+  RestoreTransfer(_state: number): void {}
+}`,
+    },
+  ]);
+  assert.deepEqual(
+    complete.diagnostics.filter((diagnostic) => diagnostic.code.startsWith("tiangz.lifecycle.")),
+    [],
+  );
+});
+
 test("warns when a Component exposes a mutable collection or a Handler imports Native Ref", () => {
   const snapshot = analyzeTiangZProject([
     {
@@ -662,12 +718,14 @@ test("tracks Hotfix patches, Systems, and benchmark handlers as generated select
     { relativePath: "app/hotfix/demo/LoginHotfix.ts", text: "export class LoginHotfix {}" },
     { relativePath: "app/hotfix/demo/PlayerUnitSystem.ts", text: "export class PlayerUnitSystem {}" },
     { relativePath: "app/hotfix/bench/handlers/PingHandler.ts", text: "export class PingHandler {}" },
+    { relativePath: "app/model/demo/PlayerUnit.ts", text: "export class PlayerUnit {}" },
   ];
   const manifest = generatedManifest({
     selections: [
       { kind: "hotfix-patch", roots: ["app/hotfix/demo"], paths: [files[0].relativePath] },
       { kind: "hotfix-system", roots: ["app/hotfix/demo"], paths: [files[1].relativePath] },
       { kind: "bench-handler", roots: ["app/hotfix/bench"], paths: [files[2].relativePath] },
+      { kind: "system-model", roots: ["app/model"], paths: [files[3].relativePath] },
     ],
   });
   const snapshot = analyzeTiangZProject([

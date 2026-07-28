@@ -41,6 +41,21 @@ const CLASS_HANDLER_DECORATORS = new Map<string, HandlerKind>([
   ["actorMessageHandler", "actorMessage"],
 ]);
 
+interface LifecycleModelContract {
+  readonly name: string;
+  readonly requiredMethods: readonly string[];
+  readonly transferMethods: readonly string[];
+  readonly ownMethods: ReadonlySet<string>;
+  readonly ownAsyncMethods: ReadonlySet<string>;
+  readonly location: SourceLocation;
+}
+
+interface LifecycleSystemContract {
+  readonly target: string;
+  readonly methods: ReadonlyMap<string, { readonly async: boolean; readonly location: SourceLocation }>;
+  readonly location: SourceLocation;
+}
+
 export function analyzeTiangZProject(sources: readonly ProjectSource[]): TiangZProjectSnapshot {
   const processes: ProcessConfigModel[] = [];
   const machines: MachineConfigModel[] = [];
@@ -50,6 +65,8 @@ export function analyzeTiangZProject(sources: readonly ProjectSource[]): TiangZP
   const protocols: ProtocolDescriptorModel[] = [];
   const handlers: HandlerModel[] = [];
   const diagnostics: ProjectDiagnostic[] = [];
+  const lifecycleModels: LifecycleModelContract[] = [];
+  const lifecycleSystems: LifecycleSystemContract[] = [];
   const manifestText = sources.find(
     (source) => normalizePath(source.relativePath) === "codegen.manifest.json",
   )?.text;
@@ -65,6 +82,8 @@ export function analyzeTiangZProject(sources: readonly ProjectSource[]): TiangZP
         protocols,
         handlers,
         diagnostics,
+        lifecycleModels,
+        lifecycleSystems,
       );
     } else if (relativePath.startsWith("configs/") && relativePath.endsWith(".json")) {
       analyzeConfig({ ...source, relativePath }, processes, machines, diagnostics);
@@ -72,6 +91,7 @@ export function analyzeTiangZProject(sources: readonly ProjectSource[]): TiangZP
   }
 
   validateGeneratedIntegrity(sources, diagnostics);
+  validateLifecycleContracts(lifecycleModels, lifecycleSystems, diagnostics);
   resolveProtocolCodes(protocols, msgcodes);
   validateProject(processes, machines, declarations, protocols, handlers, diagnostics);
   return {
@@ -156,6 +176,8 @@ function analyzeTypeScript(
   protocols: ProtocolDescriptorModel[],
   handlers: HandlerModel[],
   diagnostics: ProjectDiagnostic[],
+  lifecycleModels: LifecycleModelContract[],
+  lifecycleSystems: LifecycleSystemContract[],
 ): void {
   const sourceFile = ts.createSourceFile(
     source.relativePath,
@@ -183,8 +205,166 @@ function analyzeTypeScript(
   visit(sourceFile);
 
   function visit(node: ts.Node): void {
-    if (ts.isClassDeclaration(node) && node.name) analyzeClass(sourceFile, source.relativePath, node, declarations, handlers);
+    if (ts.isClassDeclaration(node) && node.name) {
+      analyzeClass(sourceFile, source.relativePath, node, declarations, handlers);
+      collectLifecycleContract(
+        sourceFile,
+        source.relativePath,
+        node,
+        lifecycleModels,
+        lifecycleSystems,
+        diagnostics,
+      );
+    }
     ts.forEachChild(node, visit);
+  }
+}
+
+/** 收集Model声明与System实现，不创建TypeScript Program。 / Collects Model declarations and System implementations without creating a TypeScript Program. */
+function collectLifecycleContract(
+  sourceFile: ts.SourceFile,
+  relativePath: string,
+  declaration: ts.ClassDeclaration,
+  models: LifecycleModelContract[],
+  systems: LifecycleSystemContract[],
+  diagnostics: ProjectDiagnostic[],
+): void {
+  const normalized = normalizePath(relativePath);
+  const decorators = decoratorsOf(declaration);
+  const systemDecorator = decorators.find((decorator) => {
+    const call = decoratorCall(decorator);
+    return expressionName(call?.expression ?? decorator.expression) === "systemFor";
+  });
+  if (normalized.startsWith("app/hotfix/") && systemDecorator) {
+    const call = decoratorCall(systemDecorator);
+    const target = call?.arguments[0];
+    if (!target || !ts.isIdentifier(target)) return;
+    const methods = new Map<string, { async: boolean; location: SourceLocation }>();
+    for (const member of declaration.members) {
+      if (!ts.isMethodDeclaration(member) || !member.name) continue;
+      const name = member.name.getText(sourceFile);
+      methods.set(name, {
+        async: ts.getModifiers(member)?.some((modifier) => modifier.kind === ts.SyntaxKind.AsyncKeyword) ?? false,
+        location: sourceLocation(sourceFile, member.name.getStart(sourceFile), relativePath),
+      });
+    }
+    systems.push({
+      target: target.text,
+      methods,
+      location: sourceLocation(sourceFile, declaration.name!.getStart(sourceFile), relativePath),
+    });
+    return;
+  }
+  if (!normalized.startsWith("app/model/")) return;
+
+  const requiredMethods: string[] = [];
+  const lifecycleDecorator = decorators.find((decorator) => {
+    const call = decoratorCall(decorator);
+    return expressionName(call?.expression ?? decorator.expression) === "lifecycle";
+  });
+  if (lifecycleDecorator) {
+    const options = decoratorCall(lifecycleDecorator)?.arguments[0];
+    if (options && ts.isObjectLiteralExpression(options)) {
+      const names = new Map([["awake", "Awake"], ["destroy", "OnDestroy"], ["deserialize", "Deserialize"]]);
+      for (const property of options.properties) {
+        if (!ts.isPropertyAssignment(property) || !ts.isIdentifier(property.name)
+          || property.initializer.kind !== ts.SyntaxKind.TrueKeyword) continue;
+        const method = names.get(property.name.text);
+        if (method) requiredMethods.push(method);
+      }
+    } else {
+      diagnostics.push({
+        code: "tiangz.lifecycle.invalid-declaration",
+        severity: "error",
+        message: "@lifecycle必须使用对象字面量，并且只把需要的awake、destroy、deserialize设为true。",
+        location: sourceLocation(sourceFile, lifecycleDecorator.getStart(sourceFile), relativePath),
+      });
+    }
+  }
+  const transferable = decorators.some((decorator) => {
+    const call = decoratorCall(decorator);
+    return expressionName(call?.expression ?? decorator.expression) === "transferable";
+  });
+  if (!lifecycleDecorator && !transferable) return;
+  const ownMethods = new Set<string>();
+  const ownAsyncMethods = new Set<string>();
+  for (const member of declaration.members) {
+    if (!ts.isMethodDeclaration(member) || !member.name) continue;
+    const name = member.name.getText(sourceFile);
+    ownMethods.add(name);
+    if (ts.getModifiers(member)?.some((modifier) => modifier.kind === ts.SyntaxKind.AsyncKeyword)) {
+      ownAsyncMethods.add(name);
+    }
+  }
+  models.push({
+    name: declaration.name!.text,
+    requiredMethods,
+    transferMethods: transferable ? ["CaptureTransfer", "RestoreTransfer"] : [],
+    ownMethods,
+    ownAsyncMethods,
+    location: sourceLocation(sourceFile, declaration.name!.getStart(sourceFile), relativePath),
+  });
+}
+
+/** 校验声明过的能力一定有同步实现。 / Validates that every declared capability has a synchronous implementation. */
+function validateLifecycleContracts(
+  models: readonly LifecycleModelContract[],
+  systems: readonly LifecycleSystemContract[],
+  diagnostics: ProjectDiagnostic[],
+): void {
+  for (const model of models) {
+    const matches = systems.filter((system) => system.target === model.name);
+    const system = matches.length === 1 ? matches[0] : undefined;
+    if (model.requiredMethods.length > 0 && !system) {
+      diagnostics.push({
+        code: "tiangz.lifecycle.missing-system",
+        severity: "error",
+        message: `${model.name}声明了Hotfix生命周期，但没有找到唯一的@systemFor(${model.name})实现。`,
+        location: model.location,
+      });
+      continue;
+    }
+    for (const method of model.requiredMethods) validateMethod(model, system, method, false);
+    for (const method of model.transferMethods) {
+      if (model.ownMethods.has(method)) {
+        if (model.ownAsyncMethods.has(method)) {
+          diagnostics.push({
+            code: "tiangz.lifecycle.async-method",
+            severity: "error",
+            message: `${model.name}.${method}是迁移生命周期方法，不能声明为async。`,
+            location: model.location,
+          });
+        }
+        continue;
+      }
+      validateMethod(model, system, method, true);
+    }
+  }
+
+  function validateMethod(
+    model: LifecycleModelContract,
+    system: LifecycleSystemContract | undefined,
+    method: string,
+    transfer: boolean,
+  ): void {
+    const implementation = system?.methods.get(method);
+    if (!implementation) {
+      diagnostics.push({
+        code: "tiangz.lifecycle.missing-method",
+        severity: "error",
+        message: `${model.name}${transfer ? "使用了@transferable" : "声明了生命周期"}，但缺少同步方法${method}。`,
+        location: system?.location ?? model.location,
+      });
+      return;
+    }
+    if (implementation.async) {
+      diagnostics.push({
+        code: "tiangz.lifecycle.async-method",
+        severity: "error",
+        message: `${model.name}.${method}是生命周期方法，不能声明为async。`,
+        location: implementation.location,
+      });
+    }
   }
 }
 
