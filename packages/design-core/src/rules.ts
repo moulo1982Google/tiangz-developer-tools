@@ -15,12 +15,16 @@ export const DESIGN_RULES: readonly DesignRule[] = [
   rule("sync.none", "无网络同步", "纯服务端过程不产生网络同步，结果由被修改领域自行同步。", "docs/patterns/state-replication.md"),
   rule("lifecycle.owner-cascade", "所有权级联", "所有者销毁时自动销毁子Entity、组件、Timer和Native handle。", "docs/patterns/lifecycle-and-persistence.md"),
   rule("lifecycle.active-instance", "活动实例", "只为当前存在且有行为的实例创建ChildEntity。", "docs/patterns/lifecycle-and-persistence.md"),
+  rule("persistence.record", "持久化记录", "数据库记录与运行时Entity、协议Snapshot使用不同类型。", "docs/patterns/lifecycle-and-persistence.md"),
   rule("persistence.stable-id", "稳定持久化身份", "持久化业务ID和时间戳，不保存InstanceId或TimerId。", "docs/patterns/lifecycle-and-persistence.md"),
+  rule("execution.update", "固定帧更新", "每个固定逻辑帧必须执行的连续逻辑使用Update。", "docs/patterns/timer-update-and-action.md"),
   rule("execution.timer", "稀疏Timer", "稀疏到期和周期触发使用Timer。", "docs/patterns/timer-update-and-action.md"),
   rule("execution.coalesced-timer", "合并Timer", "同一所有者下大量定时对象使用最近到期Timer统一调度。", "docs/patterns/timer-update-and-action.md"),
   rule("execution.action-delegation", "Action领域委托", "Action修改哪个领域，就调用哪个领域能力并复用其同步机制。", "docs/patterns/timer-update-and-action.md"),
   rule("data.ts-default", "TypeScript优先", "普通业务状态和行为默认留在Model/Hotfix TypeScript。", "docs/patterns/data-placement.md"),
   rule("data.native-measure-first", "Native先测量", "只有实测收益支持时才把高频权威数据下沉Rust。", "docs/patterns/data-placement.md"),
+  rule("data.coarse-op", "粗粒度Native操作", "TS与Rust之间使用粗粒度批处理，避免Update中逐对象逐字段往返。", "docs/patterns/data-placement.md"),
+  rule("data.generated-boundary", "生成边界", "Native Ref、Rust Pool和FastOp由codegen生成，业务不手写桥代码。", "docs/patterns/data-placement.md"),
 ] as const;
 
 const RULES_BY_ID = new Map(DESIGN_RULES.map((item) => [item.id, item]));

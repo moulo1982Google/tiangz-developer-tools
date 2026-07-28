@@ -2,10 +2,21 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  DESIGN_RULES,
   formatDesignRecommendation,
   inferSystemArchetype,
   recommendSystemDesign,
 } from "../dist/index.js";
+
+test("稳定规则目录没有重复并覆盖全部领域文档编号", () => {
+  const ids = DESIGN_RULES.map((rule) => rule.id);
+  assert.equal(ids.length, 24);
+  assert.equal(new Set(ids).size, ids.length);
+  assert.ok(ids.includes("persistence.record"));
+  assert.ok(ids.includes("execution.update"));
+  assert.ok(ids.includes("data.coarse-op"));
+  assert.ok(ids.includes("data.generated-boundary"));
+});
 
 test("Buff只同步生命周期事件，Tick结果委托给对应领域", () => {
   const result = recommendSystemDesign({ archetype: "buff" });
