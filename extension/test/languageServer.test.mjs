@@ -1,9 +1,11 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 const testRoot = path.dirname(fileURLToPath(import.meta.url));
 const serverPath = path.resolve(testRoot, "../dist/server.cjs");
@@ -164,6 +166,59 @@ class BrokenLoginHandler implements SessionRpcHandler<LoginScene, LoginSession, 
     await rpc.waitForExit();
   } finally {
     rpc.dispose();
+  }
+});
+
+test("indexes arbitrary Manifest input extensions without stale diagnostics", async () => {
+  const workspace = await mkdtemp(path.join(os.tmpdir(), "tiangz-manifest-input-"));
+  const rpc = new StdioRpc(serverPath);
+  try {
+    const inputPath = path.join(workspace, "game_config", "Datas", "ItemConfig.xlsx");
+    const manifestPath = path.join(workspace, "codegen.manifest.json");
+    const inputText = "binary-fixture";
+    const manifestText = JSON.stringify({
+      version: 1,
+      hashAlgorithm: "sha256-normalized-text-v1",
+      generators: {
+        "game-config": {
+          command: "npm run codegen:game-config",
+          contentInputs: { "game_config/Datas/ItemConfig.xlsx": textHash(inputText) },
+          selections: [],
+          outputs: {},
+          outputRoots: [],
+        },
+      },
+    });
+    await mkdir(path.dirname(inputPath), { recursive: true });
+    await writeFile(inputPath, inputText, "utf8");
+    await writeFile(manifestPath, manifestText, "utf8");
+
+    const rootUri = pathToFileURL(workspace).toString();
+    const manifestUri = pathToFileURL(manifestPath).toString();
+    const inputUri = pathToFileURL(inputPath).toString();
+    await rpc.request("initialize", {
+      processId: null,
+      rootUri,
+      capabilities: {},
+      workspaceFolders: [{ uri: rootUri, name: "workspace" }],
+    });
+    rpc.notify("initialized", {});
+    const snapshot = rpc.waitForNotification(
+      "tiangzProject/snapshot",
+      () => true,
+    );
+    rpc.notify("tiangzProject/indexFiles", { roots: [{ rootUri, uris: [manifestUri, inputUri] }] });
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    const stats = await rpc.request("tiangzProject/serverStats", null);
+    assert.equal(stats.cachedFiles, 2);
+    assert.deepEqual((await snapshot).snapshot.diagnostics, []);
+
+    await rpc.request("shutdown", null);
+    rpc.notify("exit", null);
+    await rpc.waitForExit();
+  } finally {
+    rpc.dispose();
+    await rm(workspace, { recursive: true, force: true });
   }
 });
 

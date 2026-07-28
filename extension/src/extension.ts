@@ -73,10 +73,12 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     projects = projects.filter((project) => activeRoots.has(project.folder.uri.toString()));
     tree.setProjects(projects);
     if (client) {
-      await client.sendNotification(INDEX_FILES_NOTIFICATION, discoveries.map((project) => ({
-        rootUri: project.folder.uri.toString(),
-        uris: project.sourceUris.map((uri) => uri.toString()),
-      })));
+      await client.sendNotification(INDEX_FILES_NOTIFICATION, {
+        roots: discoveries.map((project) => ({
+          rootUri: project.folder.uri.toString(),
+          uris: project.sourceUris.map((uri) => uri.toString()),
+        })),
+      });
     }
   };
   const scheduleRefresh = (): void => {

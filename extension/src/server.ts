@@ -49,6 +49,7 @@ const documents = new TextDocuments(TextDocument);
 const sources = new Map<string, CachedSource>();
 const snapshots = new Map<string, TiangZProjectSnapshot>();
 const publishedUris = new Set<string>();
+const indexedUris = new Set<string>();
 let rootUris: readonly string[] = [];
 let validationTimer: NodeJS.Timeout | undefined;
 let shuttingDown = false;
@@ -72,8 +73,16 @@ connection.onInitialize((params: InitializeParams): InitializeResult => {
 });
 
 connection.onNotification(INDEX_FILES_NOTIFICATION, (value: unknown) => {
-  if (!Array.isArray(value)) return;
-  const groups = value.filter(isIndexedRootFiles);
+  const candidates = Array.isArray(value)
+    ? value
+    : isRecord(value) && Array.isArray(value.roots)
+      ? value.roots
+      : [];
+  const groups = candidates.filter(isIndexedRootFiles);
+  indexedUris.clear();
+  for (const group of groups) {
+    for (const uri of group.uris) indexedUris.add(uri);
+  }
   for (const group of groups) {
     const nextUris = new Set(group.uris);
     for (const [uri, source] of sources) {
@@ -237,6 +246,7 @@ connection.onShutdown(() => {
   for (const uri of publishedUris) connection.sendDiagnostics({ uri, diagnostics: [] });
   sources.clear();
   snapshots.clear();
+  indexedUris.clear();
 });
 
 documents.listen(connection);
@@ -244,7 +254,7 @@ connection.listen();
 
 async function loadFiles(groups: readonly IndexedRootFiles[]): Promise<void> {
   const files = groups.flatMap((group) => group.uris.map((uri) => ({ rootUri: group.rootUri, uri })))
-    .filter((item) => item.uri.startsWith("file:") && isProjectFile(item.uri));
+    .filter((item) => item.uri.startsWith("file:") && indexedUris.has(item.uri));
   let cursor = 0;
   const worker = async (): Promise<void> => {
     while (!shuttingDown) {
@@ -476,7 +486,7 @@ function prefersServer(relativePath: string): boolean {
 }
 
 function isProjectFile(uri: string): boolean {
-  return /\.(?:ts|json|proto|native|mjs|rs|js)$/.test(uri);
+  return indexedUris.has(uri) || /\.(?:ts|json|proto|native|mjs|rs|js)$/.test(uri);
 }
 
 function isIndexedRootFiles(value: unknown): value is IndexedRootFiles {
