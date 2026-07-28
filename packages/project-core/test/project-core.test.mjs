@@ -515,7 +515,7 @@ import "./main";`,
   assert.deepEqual(snapshot.diagnostics, []);
 });
 
-test("warns only for high-confidence runtime shape instability", () => {
+test("rejects unstable long-lived Model fields", () => {
   const snapshot = analyzeTiangZProject([
     {
       relativePath: "app/model/game/PlayerUnit.ts",
@@ -523,6 +523,8 @@ test("warns only for high-confidence runtime shape instability", () => {
 export class PlayerUnit extends Unit {
   unsafe: any = 0;
   mixed: number | string = 0;
+  maybeCount: number | undefined = 0;
+  optionalCount?: number;
   target: Unit | null = null;
   mode: "idle" | "moving" = "idle";
 
@@ -540,9 +542,9 @@ export class PlayerUnit extends Unit {
   const warnings = snapshot.diagnostics.filter(
     (diagnostic) => diagnostic.code === "tiangz.performance.unstable-shape",
   );
-  assert.equal(warnings.length, 4);
-  assert.ok(warnings.every((diagnostic) => diagnostic.severity === "warning"));
-  assert.deepEqual(warnings.map((diagnostic) => diagnostic.location.line), [2, 3, 8, 9]);
+  assert.equal(warnings.length, 6);
+  assert.ok(warnings.every((diagnostic) => diagnostic.severity === "error"));
+  assert.deepEqual(warnings.map((diagnostic) => diagnostic.location.line), [2, 3, 4, 5, 10, 11]);
 });
 
 test("does not warn for nullable fields, discriminated unions, dictionaries or ordinary DTOs", () => {

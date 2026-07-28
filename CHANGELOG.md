@@ -1,5 +1,10 @@
 # 更新记录
 
+## 0.12.0
+
+- Model长期状态类中的`any`、可选字段、基本类型与`undefined`联合、跨基本类型联合、`delete`字段和`as any`写入升级为错误诊断。
+- 保留对象`T | null`、判别联合、显式Map/Record和普通DTO，检查继续使用单文件语法树，避免额外TypeScript Program占用。
+
 ## 0.11.1
 
 - 增加 Component 公共可变 `Map/Set` 黄色诊断，避免业务绕过集合所有者。

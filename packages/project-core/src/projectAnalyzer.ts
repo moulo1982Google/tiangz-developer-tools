@@ -305,6 +305,10 @@ function validateRuntimeShapeStability(
   function validateRuntimeClassFields(declaration: ts.ClassDeclaration): void {
     for (const member of declaration.members) {
       if (!ts.isPropertyDeclaration(member) || !member.name || hasStaticModifier(member)) continue;
+      if (member.questionToken) {
+        report(member.name, "长期状态字段不能使用可选属性；请给出稳定默认值，或使用显式对象空值表达业务状态。");
+        continue;
+      }
       if (member.type && containsAnyType(member.type)) {
         report(member.name, "运行时状态字段不应使用 any；请声明稳定类型，动态键值请显式使用 Map 或 Record。");
         continue;
@@ -314,6 +318,13 @@ function validateRuntimeShapeStability(
           member.name,
           "该字段的联合类型跨越不同运行时存储种类，热点写入可能反复改变 V8 类型反馈；建议拆分字段。",
         );
+        continue;
+      }
+      if (member.type && hasPrimitiveUndefinedUnion(member.type)) {
+        report(
+          member.name,
+          "基本类型状态字段不能包含 undefined；请让 number/string/boolean 等字段在整个生命周期保持同一种类型。",
+        );
       }
     }
   }
@@ -321,11 +332,18 @@ function validateRuntimeShapeStability(
   function report(node: ts.Node, message: string): void {
     diagnostics.push({
       code: "tiangz.performance.unstable-shape",
-      severity: "warning",
+      severity: normalizePath(relativePath).startsWith("app/model/") ? "error" : "warning",
       message,
       location: sourceLocation(sourceFile, node.getStart(sourceFile), relativePath),
     });
   }
+}
+
+/** 检查基本类型字段是否允许写入 undefined；这会破坏长期状态的固定类型约束。 / Checks whether a primitive state field admits undefined, which breaks its stable lifetime type. */
+function hasPrimitiveUndefinedUnion(type: ts.TypeNode): boolean {
+  if (!ts.isUnionTypeNode(type)) return false;
+  const hasUndefined = type.types.some((part) => part.kind === ts.SyntaxKind.UndefinedKeyword);
+  return hasUndefined && type.types.some((part) => primitiveTypeCategory(part) !== undefined);
 }
 
 /** 判断源码是否属于需要性能建议的业务 Model/Hotfix，压测代码不参与。 / Determines whether a source belongs to business Model/Hotfix code that should receive performance advice; benchmark code is excluded. */
