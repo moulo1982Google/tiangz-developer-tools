@@ -18,5 +18,7 @@
 - 无 `process.debug` 时生成临时配置，不修改正式 JSON。
 - 从 StartMachine 启动/停止源码开发模式，保存 Hotfix 后由主工程自动构建候选并 Reload。
 - 对高置信的运行时字段类型和对象形状不稳定写法发布黄色性能建议。
+- 使用“TiangZ：设计业务系统”向导生成 Item、Buff、Quest、Achievement、Numeric 或自定义系统设计。
+- 在聊天窗口使用 `@tiangz /design buff`；确定性规则负责结论，当前模型只负责中文解释。
 
-详细说明与路线图位于项目仓库根目录。
+详细说明、CLI、MCP 接入方式与路线图位于项目仓库根目录。

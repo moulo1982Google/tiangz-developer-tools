@@ -1,6 +1,6 @@
 {
   "name": "@tiangz/developer-tools-core",
-  "version": "0.12.0",
+  "version": "0.13.0",
   "description": "TiangZ 工程模型、静态索引与 VS Code 开发工具",
   "author": "moulo",
   "license": "MIT",
@@ -12,18 +12,29 @@
   "main": "./packages/project-core/dist/index.js",
   "types": "./packages/project-core/dist/index.d.ts",
   "bin": {
-    "tiangz-check-project": "./dist/tiangz-check-project.cjs"
+    "tiangz-check-project": "./dist/tiangz-check-project.cjs",
+    "tiangz-design": "./dist/tiangz-design.cjs",
+    "tiangz-design-mcp": "./dist/tiangz-design-mcp.cjs"
   },
   "exports": {
     ".": {
       "types": "./packages/project-core/dist/index.d.ts",
       "import": "./packages/project-core/dist/index.js"
+    },
+    "./design": {
+      "types": "./packages/design-core/dist/index.d.ts",
+      "import": "./packages/design-core/dist/index.js"
     }
   },
   "files": [
     "packages/project-core/dist/**",
+    "packages/design-core/dist/**",
     "dist/tiangz-check-project.cjs",
     "dist/tiangz-check-project.cjs.map",
+    "dist/tiangz-design.cjs",
+    "dist/tiangz-design.cjs.map",
+    "dist/tiangz-design-mcp.cjs",
+    "dist/tiangz-design-mcp.cjs.map",
     "README.md",
     "LICENSE"
   ],
@@ -32,21 +43,32 @@
   ],
   "scripts": {
     "build:core": "tsc -p packages/project-core/tsconfig.json",
+    "build:design": "tsc -p packages/design-core/tsconfig.json",
     "typecheck:cli": "tsc -p packages/project-cli/tsconfig.json",
+    "typecheck:design-cli": "tsc -p packages/design-cli/tsconfig.json",
+    "typecheck:design-mcp": "tsc -p packages/design-mcp/tsconfig.json",
     "build:cli": "node tools/build-cli.mjs",
+    "build:design-cli": "node tools/build-design-cli.mjs",
+    "build:design-mcp": "node tools/build-design-mcp.mjs",
     "build:extension": "npm run typecheck --workspace tiangz-developer-tools && npm run build --workspace tiangz-developer-tools",
     "test:core": "npm run build:core && node --test packages/project-core/test/*.test.mjs",
+    "test:design": "npm run build:design && node --test packages/design-core/test/*.test.mjs",
+    "test:design-cli": "npm run typecheck:design-cli && npm run build:design-cli && node --test packages/design-cli/test/*.test.mjs",
+    "test:design-mcp": "npm run typecheck:design-mcp && npm run build:design-mcp && node --test packages/design-mcp/test/*.test.mjs",
     "test:cli": "npm run typecheck:cli && npm run build:cli && node --test packages/project-cli/test/*.test.mjs",
     "test:server": "npm run build:extension && node --test extension/test/*.test.mjs",
-    "check": "npm run test:core && npm run test:cli && npm run test:server && npm run check:package --workspace tiangz-developer-tools",
+    "check": "npm run test:core && npm run test:design && npm run test:design-cli && npm run test:design-mcp && npm run test:cli && npm run test:server && npm run check:package --workspace tiangz-developer-tools",
     "check:project": "npm run build:cli && node dist/tiangz-check-project.cjs",
-    "prepare": "npm run build:core && npm run build:cli",
+    "prepare": "npm run build:core && npm run build:design && npm run build:design-cli && npm run build:design-mcp && npm run build:cli",
     "package:extension": "npm run package --workspace tiangz-developer-tools"
   },
   "dependencies": {
-    "typescript": "^5.9.3"
+    "@modelcontextprotocol/server": "^2.0.0",
+    "typescript": "^5.9.3",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@modelcontextprotocol/client": "^2.0.0",
     "@types/node": "^24.0.0",
     "esbuild": "^0.25.0"
   },

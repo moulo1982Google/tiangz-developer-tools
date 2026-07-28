@@ -1,5 +1,13 @@
 # 更新记录
 
+## 0.13.0
+
+- 增加不依赖 VS Code 的领域设计规则库，冻结 Item、Buff、Quest、Achievement、Numeric 与自定义系统的核心语义。
+- 增加“TiangZ：设计业务系统”向导和 `@tiangz` 聊天参与者；AI 只在用户主动请求时解释确定性报告。
+- 增加 `tiangz-design` CLI，支持 Markdown、JSON 和输入文件。
+- 增加只读 `tiangz-design-mcp`，向其他 AI 暴露规则查询、类型推断和系统设计工具。
+- 增加 Buff、Quest、Item 与自定义 ChildEntity/Actor 决策回归测试。
+
 ## 0.12.0
 
 - Model长期状态类中的`any`、可选字段、基本类型与`undefined`联合、跨基本类型联合、`delete`字段和`as any`写入升级为错误诊断。

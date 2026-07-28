@@ -17,6 +17,7 @@ import type {
 import { CodegenTaskManager, generatorLabel } from "./codegenTaskManager.js";
 import { attachDebugger, prepareDebugLaunch } from "./debugSession.js";
 import { DevSourceManager } from "./devSourceManager.js";
+import { registerDesignAssistant } from "./designAssistant.js";
 import {
   discoverWorkspaceFolder,
   type DiscoveredProject,
@@ -63,6 +64,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   let discoveries: readonly DiscoveredProject[] = [];
   let refreshTimer: NodeJS.Timeout | undefined;
   const debugConfigStorage = context.storageUri ?? context.globalStorageUri;
+  const designAssistantSubscriptions = registerDesignAssistant(context);
 
   const refresh = async (): Promise<void> => {
     const folders = vscode.workspace.workspaceFolders ?? [];
@@ -148,6 +150,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     processStateSubscription,
     ...watchers,
     snapshotSubscription,
+    ...designAssistantSubscriptions,
     vscode.workspace.onDidChangeWorkspaceFolders(scheduleRefresh),
     vscode.workspace.onDidChangeConfiguration((event) => {
       if (event.affectsConfiguration("tiangzDeveloperTools")) scheduleRefresh();

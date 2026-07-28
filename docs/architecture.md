@@ -18,6 +18,17 @@ codegen.manifest.json -----/                         |
 
 `project-core` 使用 TypeScript Compiler API 读取装饰器和类声明，不使用正则解释 TypeScript。它不读取文件系统、不依赖 VS Code，也不启动 TiangZ 进程。
 
+领域设计能力使用另一条纯函数链路：
+
+```text
+TiangZ领域规则 -----> design-core -----> VS Code向导
+                         |              |-> @tiangz聊天解释
+                         |              |-> tiangz-design CLI
+                         `--------------`-> tiangz-design-mcp
+```
+
+`design-core`不读取工程、不调用模型、不修改代码。它根据明确输入返回稳定规则编号、所有权、Entity形态、同步语义、生命周期和风险提示。VS Code聊天只能在用户主动请求后调用当前选择的模型，并将确定性报告作为不可改写的约束；CLI与MCP不需要模型也能得到相同结论。
+
 ## 当前索引
 
 - 配置：Environment、StartMachine、Process、`scenes`、`knownScenes`。
@@ -43,6 +54,8 @@ Generated 完整性由根目录 `codegen.manifest.json` 描述。Language Server
 - “TiangZ：显示语言服务器状态”可查看缓存文件、协议、Handler、校验耗时和堆内存。
 
 Component 所有权检查只分析单文件语法：公共可变 `Map/Set` 和生产 Handler 导入 `Native*Ref` 产生黄色建议；它不创建 TypeChecker，不追踪跨文件数据流，也不限制所属 System 或 Bench 使用 Native 句柄。
+
+`design-core`只维护少量不可变规则对象，每次请求创建一份短生命周期结果；不扫描工作区、不持有AST，也不在后台调用模型。MCP服务使用stdio，标准输出只承载协议帧。
 
 工作区增长到需要增量索引时，缓存应放在独立索引层，并以 URI 和文档版本为键；不能把缓存塞进语义模型。
 

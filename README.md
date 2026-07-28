@@ -28,6 +28,9 @@ TiangZ 框架的工程模型、静态检查与 VS Code 开发工具。
 - 从 StartMachine 启动主工程统一的源码开发模式，保存 Hotfix 后自动构建不可变候选并 Reload。
 - 对运行时状态类中显式 `any`、跨基本存储种类联合字段、`delete` 字段和 `as any` 属性写入提供黄色性能建议。
 - 对 Component 公开可变 `Map/Set`、生产 Handler 直接导入 `Native*Ref` 提供黄色所有权建议，引导业务通过 Component 领域方法修改子对象。
+- 提供确定性的领域设计规则库，覆盖 Item、Buff、Quest、Achievement、Numeric 及自定义系统。
+- 提供“TiangZ：设计业务系统”向导和 `@tiangz /design` 聊天入口；AI 只解释规则，不改变确定性结论。
+- 提供 `tiangz-design` CLI 和只读 `tiangz-design-mcp`，让终端、CI 与其他 AI 使用同一套规则。
 
 ## 本地开发
 
@@ -37,13 +40,21 @@ npm run check
 npm run package:extension
 ```
 
-生成的 VSIX 位于 `dist/tiangz-developer-tools-0.11.0.vsix`。
+生成的 VSIX 位于 `dist/tiangz-developer-tools-0.13.0.vsix`。
 
 检查任意 TiangZ 工程：
 
 ```powershell
 npm run check:project -- E:\gitee\TiangZ
 node dist/tiangz-check-project.cjs E:\gitee\TiangZ --format json
+```
+
+设计一个业务系统：
+
+```powershell
+node dist/tiangz-design.cjs buff
+node dist/tiangz-design.cjs quest --format json
+node dist/tiangz-design.cjs --input .\DesignRequest.json
 ```
 
 ## 配置
@@ -79,6 +90,14 @@ node dist/tiangz-check-project.cjs E:\gitee\TiangZ --format json
 `tiangz.performance.unstable-shape`只扫描Model/Hotfix业务运行时类并排除Bench。它是可选的黄色性能建议，不会让普通`tiangz-check-project`失败；CI只有显式传入`--warnings-as-errors`时才提升警告。
 
 `tiangz.architecture.component-public-collection`与`tiangz.architecture.native-ref-in-handler`同样是低噪音黄色建议。前者防止业务绕过 Component 的集合所有权，后者防止 Handler 泄漏可变 Native 句柄；所属 System 和 Bench 仍可按需要直接使用底层能力。
+
+## 领域设计助手
+
+命令面板执行“TiangZ：设计业务系统”，可以按所有者、身份、生命周期、接收范围、变化语义、频率和持久化需求生成设计报告。Item、Buff、Quest、Achievement、Numeric 使用冻结的内置规则；自定义系统使用相同的问题模型。
+
+聊天窗口输入 `@tiangz /design buff` 或 `@tiangz quest`。确定性规则先产生结论；只有用户主动发起聊天时，才允许当前 VS Code 模型解释这些结论。模型不能把普通业务引向 `app/core`、Rust Runtime 或 Generated，也不能虚构框架 API。
+
+详细用法见[领域设计助手](docs/design-assistant.md)，为其他 AI 提供规则的方式见[MCP 服务](docs/mcp-server.md)。
 
 详细说明见 [运行与调试](docs/run-and-debug.md)。
 

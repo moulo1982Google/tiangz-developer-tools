@@ -32,14 +32,22 @@
 - [x] 提供可在 CI 运行的 `check:project` CLI
 - [x] 为 proto、scene、client handler 和 native 提供定向重新生成操作
 
-## Phase 4：运行时 Inspector
+## Phase 4：领域设计助手
+
+- [x] 建立不依赖 VS Code 和 AI 模型的确定性设计规则库
+- [x] 固化 Item、Buff、Quest、Achievement、Numeric 与自定义系统规则
+- [x] 增加 VS Code 设计向导与 `@tiangz` 聊天入口
+- [x] 增加 Markdown/JSON CLI 与只读 MCP 服务
+- [x] 使用回归测试冻结 Buff、Quest 和 ChildEntity/Actor 决策语义
+
+## Phase 5：运行时 Inspector
 
 - [ ] 按 UnitId 查询 Process、Scene、Gate 和 ActorLocation
 - [ ] 查看 mailbox 长度、pending RPC 和定时器
 - [ ] 查看 Native handle 对应的 Rust Entity 数据
 - [ ] 增加权限、限流和调试协议版本检查
 
-## Phase 5：统一安装
+## Phase 6：统一安装
 
 - [ ] 建立 TiangZ Extension Pack
 - [ ] 同时安装 Developer Tools 与 Native Language

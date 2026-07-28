@@ -2,7 +2,7 @@
   "name": "tiangz-developer-tools",
   "displayName": "TiangZ Developer Tools",
   "description": "TiangZ Process、Scene、协议导航、运行与 TypeScript 调试工具",
-  "version": "0.12.0",
+  "version": "0.13.0",
   "publisher": "moulo",
   "author": "moulo",
   "license": "MIT",
@@ -119,6 +119,11 @@
         "title": "TiangZ：显示语言服务器状态"
       },
       {
+        "command": "tiangzDeveloperTools.designSystem",
+        "title": "TiangZ：设计业务系统",
+        "icon": "$(lightbulb)"
+      },
+      {
         "command": "tiangzDeveloperTools.openLocation",
         "title": "TiangZ：打开声明"
       },
@@ -197,6 +202,21 @@
         "icon": "$(debug-stop)"
       }
     ],
+    "chatParticipants": [
+      {
+        "id": "tiangz-developer-tools.design",
+        "name": "tiangz",
+        "fullName": "TiangZ 领域设计助手",
+        "description": "依据TiangZ规则设计和解释MMORPG业务系统",
+        "isSticky": true,
+        "commands": [
+          {
+            "name": "design",
+            "description": "生成Buff、Quest、Item等业务系统的确定性设计建议"
+          }
+        ]
+      }
+    ],
     "menus": {
       "view/title": [
         {
@@ -213,6 +233,11 @@
           "command": "tiangzDeveloperTools.runCodegen",
           "when": "view == tiangzProject",
           "group": "navigation@3"
+        },
+        {
+          "command": "tiangzDeveloperTools.designSystem",
+          "when": "view == tiangzProject",
+          "group": "navigation@4"
         }
       ],
       "view/item/context": [
