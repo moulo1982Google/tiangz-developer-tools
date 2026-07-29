@@ -2,6 +2,8 @@
 
 ## 未发布
 
+## 0.14.0
+
 - 增加Model生命周期契约诊断：`@lifecycle`声明缺少对应`@systemFor`、缺少`Awake/OnDestroy/Deserialize`或错误使用`async`时直接报错。
 - 增加`@transferable()`契约诊断，要求Model自身或对应System提供同步`CaptureTransfer/RestoreTransfer`。
 - 修复索引通知顶层数组被JSON-RPC解释为位置参数，以及Language Server丢弃Manifest中Excel、XML、配置和DLL输入的问题；Manifest已索引文件不再受源码扩展名白名单限制。
