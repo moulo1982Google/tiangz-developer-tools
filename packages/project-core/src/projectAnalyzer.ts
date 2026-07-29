@@ -39,6 +39,8 @@ const CLASS_HANDLER_DECORATORS = new Map<string, HandlerKind>([
   ["unitMessageHandler", "unitMessage"],
   ["actorRpcHandler", "actorRpc"],
   ["actorMessageHandler", "actorMessage"],
+  ["syncEventHandler", "syncEvent"],
+  ["asyncEventHandler", "asyncEvent"],
 ]);
 
 interface LifecycleModelContract {
@@ -148,14 +150,25 @@ function analyzeConfig(
   }
   if (!isRecord(value.process) || typeof value.process.name !== "string") return;
   const debug = processDebugConfig(value.process.debug);
+  const identity = processIdentityConfig(value.process.identity);
   processes.push({
     environment,
     name: value.process.name,
     relativePath: source.relativePath,
+    ...(identity ? { identity } : {}),
     ...(debug ? { debug } : {}),
     scenes: sceneConfigs(value.scenes),
     knownScenes: sceneConfigs(value.knownScenes),
   });
+}
+
+function processIdentityConfig(value: unknown) {
+  if (!isRecord(value)) return undefined;
+  if (typeof value.originServerId !== "number" || typeof value.workerId !== "number") return undefined;
+  return {
+    originServerId: value.originServerId,
+    workerId: value.workerId,
+  };
 }
 
 function processDebugConfig(value: unknown) {
@@ -202,6 +215,7 @@ function analyzeTypeScript(
   validateTypeScriptDependencies(sourceFile, source.relativePath, diagnostics);
   validateRuntimeShapeStability(sourceFile, source.relativePath, diagnostics);
   validateOwnedComponentBoundaries(sourceFile, source.relativePath, diagnostics);
+  validateRuntimeFoundationUsage(sourceFile, source.relativePath, diagnostics);
   visit(sourceFile);
 
   function visit(node: ts.Node): void {
@@ -417,6 +431,179 @@ function validateOwnedComponentBoundaries(
       location: sourceLocation(sourceFile, node.getStart(sourceFile), relativePath),
     });
   }
+}
+
+/** 校验Timer、Scene Event和持久化运行时ID的高置信用法。 / Validates high-confidence Timer, Scene Event, and persisted runtime-ID usage. */
+function validateRuntimeFoundationUsage(
+  sourceFile: ts.SourceFile,
+  relativePath: string,
+  diagnostics: ProjectDiagnostic[],
+): void {
+  if (!isBusinessRuntimeSource(relativePath)) return;
+
+  for (const statement of sourceFile.statements) {
+    if (ts.isClassDeclaration(statement) && statement.name) validateClass(statement);
+    if (ts.isInterfaceDeclaration(statement) || ts.isTypeAliasDeclaration(statement)) {
+      validatePersistenceShape(statement);
+    }
+  }
+
+  function validateClass(declaration: ts.ClassDeclaration): void {
+    const methods = new Map<string, ts.MethodDeclaration>();
+    for (const member of declaration.members) {
+      if (!ts.isMethodDeclaration(member) || !member.name) continue;
+      methods.set(propertyName(member.name) ?? member.name.getText(sourceFile), member);
+    }
+
+    const eventDecorator = decoratorsOf(declaration).map((decorator) => {
+      const call = decoratorCall(decorator);
+      return expressionName(call?.expression ?? decorator.expression);
+    }).find((name) => name === "syncEventHandler" || name === "asyncEventHandler");
+    if (eventDecorator) validateEventHandler(declaration, methods.get("Handle"), eventDecorator);
+
+    for (const member of declaration.members) {
+      if (ts.isMethodDeclaration(member) && member.body) visit(member.body);
+    }
+
+    function visit(node: ts.Node): void {
+      if (ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression)) {
+        const callName = node.expression.name.text;
+        if (callName === "NewOnceTimer" || callName === "NewRepeatedTimer") {
+          validateOwnedTimerCall(node, methods);
+        } else if (callName === "RemoveTimer") {
+          report(
+            node.expression.name,
+            "tiangz.timer.legacy-remove",
+            "RemoveTimer仅保留兼容语义；新业务请使用CancelTimer(timerId, reason)，明确正常结束与主动中断。",
+            "warning",
+          );
+        } else if (callName === "PublishAsync" && !isAwaitedOrReturned(node)) {
+          report(
+            node.expression.name,
+            "tiangz.event.unawaited-async",
+            "异步Scene Event必须await或直接return，避免发布方在监听器完成前继续执行。",
+            "error",
+          );
+        }
+      }
+      ts.forEachChild(node, visit);
+    }
+  }
+
+  function validateOwnedTimerCall(
+    call: ts.CallExpression,
+    methods: ReadonlyMap<string, ts.MethodDeclaration>,
+  ): void {
+    const callbackName = stringLiteral(call.arguments[1]);
+    if (callbackName && !methods.has(callbackName)) {
+      report(
+        call.arguments[1]!,
+        "tiangz.timer.missing-method",
+        `当前文件未找到Timer方法${callbackName}；请确认它能由当前Hotfix prototype或继承链解析。`,
+        "warning",
+      );
+    }
+    const options = call.arguments[3];
+    if (!options || !ts.isObjectLiteralExpression(options)) return;
+    const cancellation = options.properties.find((property): property is ts.PropertyAssignment =>
+      ts.isPropertyAssignment(property) && propertyName(property.name) === "onCancelled"
+    );
+    const cancellationInitializer = cancellation?.initializer;
+    const cancellationName = cancellationInitializer ? stringLiteral(cancellationInitializer) : undefined;
+    if (!cancellationName) return;
+    const method = methods.get(cancellationName);
+    if (!method) {
+      report(
+        cancellationInitializer!,
+        "tiangz.timer.missing-cancel-method",
+        `当前文件未找到Timer取消回调${cancellationName}；请确认它能由当前Hotfix prototype或继承链解析。`,
+        "warning",
+      );
+    } else if (method.parameters.length < 2) {
+      report(
+        method.name,
+        "tiangz.timer.invalid-cancel-method",
+        `${cancellationName}必须接收(args, context)两个参数，context用于区分取消原因。`,
+        "error",
+      );
+    }
+  }
+
+  function validateEventHandler(
+    declaration: ts.ClassDeclaration,
+    handle: ts.MethodDeclaration | undefined,
+    decoratorName: string,
+  ): void {
+    if (!handle) {
+      report(
+        declaration.name!,
+        "tiangz.event.missing-handle",
+        `${decoratorName}类必须实现Handle方法。`,
+        "error",
+      );
+      return;
+    }
+    const asyncModifier = ts.getModifiers(handle)?.some((modifier) => modifier.kind === ts.SyntaxKind.AsyncKeyword) ?? false;
+    const promiseReturn = handle.type?.getText(sourceFile).replaceAll(" ", "").startsWith("Promise<") ?? false;
+    if (decoratorName === "syncEventHandler" && (asyncModifier || promiseReturn)) {
+      report(
+        handle.name,
+        "tiangz.event.sync-handler-async",
+        "同步Scene Event Handler必须返回void，不能声明为async或Promise。",
+        "error",
+      );
+    }
+    if (decoratorName === "asyncEventHandler" && !asyncModifier && !promiseReturn) {
+      report(
+        handle.name,
+        "tiangz.event.async-handler-sync",
+        "异步Scene Event Handler必须声明async或显式返回Promise<void>。",
+        "error",
+      );
+    }
+  }
+
+  function validatePersistenceShape(declaration: ts.InterfaceDeclaration | ts.TypeAliasDeclaration): void {
+    if (!/(?:Persistence|Persistent|Database|DB)/.test(declaration.name.text)) return;
+    const members = ts.isInterfaceDeclaration(declaration)
+      ? declaration.members
+      : ts.isTypeLiteralNode(declaration.type) ? declaration.type.members : [];
+    for (const member of members) {
+      if (!ts.isPropertySignature(member) || !member.type || !member.name) continue;
+      const type = member.type.getText(sourceFile);
+      if (type !== "InstanceId" && type !== "TimerId") continue;
+      report(
+        member.name,
+        "tiangz.persistence.runtime-id",
+        `${type}只在当前Process生命周期内有效，不能写入持久化Snapshot。请保存稳定业务Id或墙钟deadline。`,
+        "error",
+      );
+    }
+  }
+
+  function report(
+    node: ts.Node,
+    code: string,
+    message: string,
+    severity: "error" | "warning",
+  ): void {
+    diagnostics.push({
+      code,
+      severity,
+      message,
+      location: sourceLocation(sourceFile, node.getStart(sourceFile), relativePath),
+    });
+  }
+}
+
+/** PublishAsync只有被await或作为当前函数结果返回时才有完成语义。 / PublishAsync has completion semantics only when awaited or returned. */
+function isAwaitedOrReturned(call: ts.CallExpression): boolean {
+  let parent: ts.Node = call.parent;
+  while (ts.isParenthesizedExpression(parent)) parent = parent.parent;
+  return ts.isAwaitExpression(parent)
+    || ts.isReturnStatement(parent)
+    || ts.isVariableDeclaration(parent)
+    || (ts.isArrowFunction(parent) && parent.body === call);
 }
 
 /** 判断类是否为Component状态或其System行为类。 / Determines whether a class is a Component state or System behavior class. */
@@ -776,7 +963,66 @@ function validateProject(
       });
     }
   }
+  validateProcessIdentities(processes, machines, diagnostics);
   validateHandlers(protocols, handlers, diagnostics);
+}
+
+/** 按每份StartMachine的真实引用集合检查全局ID槽位，备用配置不会被误判为并发部署。 / Validates global-ID slots using each StartMachine's referenced deployment set, excluding unused alternatives. */
+function validateProcessIdentities(
+  processes: readonly ProcessConfigModel[],
+  machines: readonly MachineConfigModel[],
+  diagnostics: ProjectDiagnostic[],
+): void {
+  const processByPath = new Map(processes.map((process) => [normalizePath(process.relativePath), process]));
+  const startMachines = new Map<string, MachineConfigModel[]>();
+  for (const machine of machines) {
+    const group = startMachines.get(machine.relativePath) ?? [];
+    group.push(machine);
+    startMachines.set(machine.relativePath, group);
+  }
+  for (const [startMachinePath, group] of startMachines) {
+    const slots = new Map<string, ProcessConfigModel>();
+    for (const machine of group) {
+      const directory = path.posix.dirname(machine.relativePath);
+      for (const processFile of machine.processes) {
+        const processPath = path.posix.normalize(path.posix.join(directory, processFile.replaceAll("\\", "/")));
+        const process = processByPath.get(processPath);
+        if (!process) continue;
+        if (!process.identity) {
+          diagnostics.push({
+            code: "tiangz.config.missing-process-identity",
+            severity: "error",
+            message: `${process.name}由${path.posix.basename(startMachinePath)}启动，但缺少process.identity；请显式配置originServerId和workerId。`,
+            location: fileLocation(process.relativePath),
+          });
+          continue;
+        }
+        const { originServerId, workerId } = process.identity;
+        if (!Number.isInteger(originServerId) || originServerId < 1 || originServerId > 16_383
+          || !Number.isInteger(workerId) || workerId < 0 || workerId > 127) {
+          diagnostics.push({
+            code: "tiangz.config.invalid-process-identity",
+            severity: "error",
+            message: `${process.name}的process.identity无效：originServerId范围1..16383，workerId范围0..127。`,
+            location: fileLocation(process.relativePath),
+          });
+          continue;
+        }
+        const key = `${originServerId}:${workerId}`;
+        const previous = slots.get(key);
+        if (previous && previous.relativePath !== process.relativePath) {
+          diagnostics.push({
+            code: "tiangz.config.duplicate-process-identity",
+            severity: "error",
+            message: `${process.name}与${previous.name}在同一StartMachine复用了originServerId=${originServerId}、workerId=${workerId}。`,
+            location: fileLocation(process.relativePath),
+          });
+        } else {
+          slots.set(key, process);
+        }
+      }
+    }
+  }
 }
 
 function analyzeGeneratedProtocol(
@@ -884,6 +1130,9 @@ function projectHandlerSignature(
       if (name === "SceneMessageHandler" || name === "UnitMessageHandler" || name === "ActorMessageHandler") {
         return compactSignature({ messageType: args[1] });
       }
+      if (name === "SyncSceneEventHandler" || name === "AsyncSceneEventHandler") {
+        return compactSignature({ messageType: args[1] });
+      }
     }
   }
   return {};
@@ -911,7 +1160,7 @@ function validateHandlers(
   const handlersByProtocol = new Map<string, HandlerModel[]>();
   const bindingKeys = new Map<string, HandlerModel>();
   for (const handler of handlers) {
-    if (handler.kind === "actorMethod") continue;
+    if (handler.kind === "actorMethod" || handler.kind === "syncEvent" || handler.kind === "asyncEvent") continue;
     const symbol = normalizeDescriptorReference(handler.descriptor);
     const protocol = protocolBySymbol.get(symbol);
     if (!protocol) continue;

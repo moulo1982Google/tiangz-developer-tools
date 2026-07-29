@@ -1,0 +1,72 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "TiangZ Process 配置",
+  "type": "object",
+  "properties": {
+    "process": {
+      "type": "object",
+      "required": ["name"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "description": "当前 Process 的稳定名称。"
+        },
+        "identity": {
+          "type": "object",
+          "required": ["originServerId", "workerId"],
+          "properties": {
+            "originServerId": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 16383,
+              "description": "永久服来源编号；合服后仍不能与其他来源服重复。"
+            },
+            "workerId": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 127,
+              "description": "当前来源服内的 ID 生成节点编号。"
+            }
+          },
+          "additionalProperties": false,
+          "description": "GlobalId 生成槽位；同一 StartMachine 部署集合内必须唯一。"
+        },
+        "debug": {
+          "type": "object",
+          "properties": {
+            "inspectorIp": { "type": "string" },
+            "inspectorPort": { "type": "integer", "minimum": 1, "maximum": 65535 },
+            "breakOnStart": { "type": "boolean" },
+            "allowRemote": { "type": "boolean" }
+          },
+          "additionalProperties": true
+        }
+      },
+      "additionalProperties": true
+    },
+    "scenes": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/scene" }
+    },
+    "knownScenes": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/scene" }
+    }
+  },
+  "required": ["process"],
+  "additionalProperties": true,
+  "$defs": {
+    "scene": {
+      "type": "object",
+      "required": ["name", "sceneType"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "sceneType": { "type": "string", "minLength": 1 },
+        "ip": { "type": "string" },
+        "port": { "type": "integer", "minimum": 1, "maximum": 65535 }
+      },
+      "additionalProperties": true
+    }
+  }
+}

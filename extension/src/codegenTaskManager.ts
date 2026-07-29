@@ -15,8 +15,8 @@ export class CodegenTaskManager implements vscode.Disposable {
     const task = new vscode.Task(
       { type: "tiangz-codegen", generator: generator.id },
       folder,
-      `生成 ${generatorLabel(generator.id)}`,
-      "TiangZ Codegen",
+      generator.id === "runtime-foundation" ? generatorLabel(generator.id) : `生成 ${generatorLabel(generator.id)}`,
+      generator.id === "runtime-foundation" ? "TiangZ Test" : "TiangZ Codegen",
       new vscode.ShellExecution(generator.command, { cwd: folder.uri.fsPath }),
       [],
     );
@@ -48,6 +48,7 @@ export function generatorLabel(id: string): string {
     case "native-data": return "Native 数据";
     case "scenes": return "Scene 与服务端 Handler";
     case "client-handlers": return "客户端 Handler";
+    case "runtime-foundation": return "Runtime Foundation 自测";
     default: return id;
   }
 }

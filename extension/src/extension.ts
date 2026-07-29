@@ -162,6 +162,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.commands.registerCommand("tiangzDeveloperTools.openUriLocation", openUriLocation),
     vscode.commands.registerCommand("tiangzDeveloperTools.showProjectSummary", () => showSummary(projects)),
     vscode.commands.registerCommand("tiangzDeveloperTools.showServerStats", showServerStats),
+    vscode.commands.registerCommand("tiangzDeveloperTools.testRuntimeFoundation", () => runCommand(
+      () => testRuntimeFoundation(projects, codegenTaskManager),
+    )),
     vscode.commands.registerCommand("tiangzDeveloperTools.runCodegen", (node?: ProjectNode | vscode.Uri) => runCommand(
       () => runCodegen(node, undefined, projects, codegenTaskManager, refresh),
     )),
@@ -250,6 +253,31 @@ async function runCodegen(
   if (exitCode !== 0) throw new Error(`${generatorLabel(selected.generator.id)}生成失败，退出码 ${exitCode}；请查看任务终端`);
   await refresh();
   void vscode.window.showInformationMessage(`TiangZ：${generatorLabel(selected.generator.id)}生成完成`);
+}
+
+/** 运行主工程提供的运行时基础自测，不把测试命令混入代码生成清单。 / Runs the runtime-foundation self-test exposed by the project without mixing it into codegen metadata. */
+async function testRuntimeFoundation(
+  projects: readonly IndexedProject[],
+  manager: CodegenTaskManager,
+): Promise<void> {
+  ensureTrustedWorkspace();
+  let project: IndexedProject | undefined;
+  if (projects.length === 1) {
+    project = projects[0];
+  } else {
+    const picked = await vscode.window.showQuickPick(
+      projects.map((candidate) => ({ label: candidate.folder.name, project: candidate })),
+      { placeHolder: "选择要运行 Runtime Foundation 自测的 TiangZ 工程" },
+    );
+    project = picked?.project;
+  }
+  if (!project) return;
+  const exitCode = await manager.run(project.folder, {
+    id: "runtime-foundation",
+    command: "npm run test:runtime-foundation",
+  });
+  if (exitCode !== 0) throw new Error(`Runtime Foundation 自测失败，退出码 ${exitCode}；请查看任务终端`);
+  void vscode.window.showInformationMessage("TiangZ：Runtime Foundation 自测通过");
 }
 
 async function selectGenerator(

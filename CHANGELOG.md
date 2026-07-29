@@ -2,6 +2,14 @@
 
 ## 未发布
 
+## 0.15.0
+
+- 增加`process.identity` JSON补全与静态检查：按每份StartMachine真实引用的部署集合检查缺失、范围错误和重复ID槽位。
+- 增加Timer高置信诊断：检查方法名回调、取消回调签名、旧`RemoveTimer`用法，并识别`TimerId`误入持久化结构。
+- 增加Scene Event索引与契约检查：识别同步/异步Handler，检查`Handle`返回语义，并禁止遗漏`await PublishAsync`。
+- 为`GlobalId`、`InstanceId`、Timer、协程锁和Scene Event提供中文Hover。
+- 增加“TiangZ：运行 Runtime Foundation 自测”命令，直接调用主工程统一自测入口。
+
 ## 0.14.0
 
 - 增加Model生命周期契约诊断：`@lifecycle`声明缺少对应`@systemFor`、缺少`Awake/OnDestroy/Deserialize`或错误使用`async`时直接报错。

@@ -72,6 +72,20 @@ export class LoginHandler implements SessionRpcHandler<LoginScene, LoginSession,
     assert.match(hover.contents.value, /C2S_Login.*10001/);
     assert.match(hover.contents.value, /LoginHandler/);
 
+    const foundationUri = `${rootUri}/app/hotfix/demo/RuntimeFoundation.ts`;
+    const foundationDiagnostics = rpc.waitForNotification(
+      "textDocument/publishDiagnostics",
+      (params) => params.uri === foundationUri,
+    );
+    open(rpc, foundationUri, "export class RuntimeFoundation { timerId: TimerId = 0n; }", 1);
+    await foundationDiagnostics;
+    const foundationHover = await rpc.request("textDocument/hover", {
+      textDocument: { uri: foundationUri },
+      position: { line: 0, character: 44 },
+    });
+    assert.match(foundationHover.contents.value, /定时器句柄/);
+    assert.match(foundationHover.contents.value, /CancelTimer/);
+
     const references = await rpc.request("textDocument/references", {
       textDocument: { uri: rpcsUri },
       position: { line: 1, character: 4 },

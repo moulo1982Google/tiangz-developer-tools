@@ -2,7 +2,7 @@
   "name": "tiangz-developer-tools",
   "displayName": "TiangZ Developer Tools",
   "description": "TiangZ Process、Scene、协议导航、运行与 TypeScript 调试工具",
-  "version": "0.14.0",
+  "version": "0.15.0",
   "publisher": "moulo",
   "author": "moulo",
   "license": "MIT",
@@ -41,6 +41,7 @@
     "dist/extension.cjs.map",
     "dist/server.cjs",
     "dist/server.cjs.map",
+    "schemas/**",
     "README.md",
     "LICENSE"
   ],
@@ -117,6 +118,10 @@
       {
         "command": "tiangzDeveloperTools.showServerStats",
         "title": "TiangZ：显示语言服务器状态"
+      },
+      {
+        "command": "tiangzDeveloperTools.testRuntimeFoundation",
+        "title": "TiangZ：运行 Runtime Foundation 自测"
       },
       {
         "command": "tiangzDeveloperTools.designSystem",
@@ -345,6 +350,19 @@
         }
       ]
     },
+    "jsonValidation": [
+      {
+        "fileMatch": [
+          "configs/**/*.json",
+          "!configs/**/StartMachine.json"
+        ],
+        "url": "./schemas/process-config.schema.json"
+      },
+      {
+        "fileMatch": "configs/**/StartMachine.json",
+        "url": "./schemas/start-machine.schema.json"
+      }
+    ],
     "configuration": {
       "title": "TiangZ Developer Tools",
       "properties": {

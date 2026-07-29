@@ -189,6 +189,8 @@ connection.onHover((params): Hover | null => {
       ...protocols.map((candidate) => `- ${candidate.kind === "rpc" ? "RPC" : "Message"}：\`${candidate.symbol}\`（${candidate.name}）`),
     ].join("\n"));
   }
+  const foundation = describeRuntimeFoundationSymbol(context.word, context.expression);
+  if (foundation) return markdownHover(foundation);
   return null;
 });
 
@@ -406,6 +408,90 @@ function describeHandler(handler: HandlerModel, protocol: ProtocolDescriptorMode
     `**Descriptor**：\`${handler.descriptor}\``,
     protocol ? `**协议**：${protocol.name}` : "**协议**：未解析",
   ].join("\n\n");
+}
+
+/** 为常用运行时基础API提供中文设计提示，避免业务开发者反复翻阅Core实现。 / Provides concise Chinese design guidance for runtime-foundation APIs without requiring business developers to inspect Core internals. */
+function describeRuntimeFoundationSymbol(word: string, expression: string): string | undefined {
+  switch (word) {
+    case "GlobalId":
+      return [
+        "### `GlobalId`（永久实体 ID）",
+        "",
+        "跨 Process、跨来源服和合服后仍保持唯一，使用 TypeScript `bigint` 表示。玩家、道具等需要持久化的 Entity 保存这个 ID。",
+        "",
+        "不要把它当作数组下标，也不要转换为 `number`。",
+      ].join("\n");
+    case "GlobalIdSystem":
+      return [
+        "### `GlobalIdSystem`（全局 ID 生成器）",
+        "",
+        "由框架根据 `process.identity.originServerId` 和 `workerId` 初始化。业务通常通过 Entity 创建流程获得 ID，不应自行拼位或复制生成算法。",
+      ].join("\n");
+    case "InstanceId":
+      return [
+        "### `InstanceId`（运行实例 ID）",
+        "",
+        "只在当前 Process 生命周期内有效，用于 Scene、Entity、动态地图和运行时索引。重启或反序列化后会重新生成。",
+        "",
+        "禁止写入数据库或持久化 Snapshot；持久化关系请保存 `GlobalId`。",
+      ].join("\n");
+    case "TimerId":
+      return [
+        "### `TimerId`（定时器句柄）",
+        "",
+        "创建 Timer 时返回，用于 `CancelTimer(timerId, reason)`。它只属于当前运行期，不应持久化；需要跨重启恢复时保存墙钟截止时间。",
+      ].join("\n");
+    case "NewOnceTimer":
+      return [
+        "### `NewOnceTimer`",
+        "",
+        "创建一次性、对象归属的 Timer，并返回唯一 `TimerId`。回调使用方法名，以便 Hotfix 后解析到新 prototype。",
+        "",
+        "```ts",
+        "this.timerId = this.DomainScene.Time.NewOnceTimer(1000, \"Timeout\", args, { onCancelled: \"Cancelled\" });",
+        "```",
+      ].join("\n");
+    case "NewRepeatedTimer":
+      return [
+        "### `NewRepeatedTimer`",
+        "",
+        "创建重复 Timer，并返回唯一 `TimerId`。业务销毁时应主动取消，参数会按原样传给每次回调。",
+      ].join("\n");
+    case "CancelTimer":
+      return [
+        "### `CancelTimer`",
+        "",
+        "主动中断 Timer。若创建时配置 `onCancelled`，框架会立即回调 `(args, context)`，其中 `context.reason` 表示中断原因。正常到期不会触发取消回调。",
+      ].join("\n");
+    case "Locks":
+    case "RunExclusive":
+      if (!expression.includes("Locks") && word === "RunExclusive") return undefined;
+      return [
+        "### Scene 协程锁",
+        "",
+        "`await scene.Locks.RunExclusive(type, key, action)` 只串行化相同 `(type, key)` 的业务；不同门派、玩家或资源键仍可并行。锁不能跨 Scene。",
+        "",
+        "不要在持锁期间等待不可控的外部流程，避免同一业务键长期排队。",
+      ].join("\n");
+    case "Events":
+      return [
+        "### Scene Event",
+        "",
+        "`scene.Events` 只能发布到当前 Scene。同步事件使用 `Publish`；异步事件使用 `await PublishAsync`。跨 Scene 协作请用 RPC、Actor 消息或 Location 路由。",
+      ].join("\n");
+    case "Publish":
+      if (!expression.includes("Events.Publish")) return undefined;
+      return "### `Events.Publish`\n\n同步发布当前 Scene 内事件；所有 Handler 必须同步返回。";
+    case "PublishAsync":
+      if (!expression.includes("Events.PublishAsync")) return undefined;
+      return "### `Events.PublishAsync`\n\n异步发布当前 Scene 内事件；调用方必须 `await` 或直接 `return`，完成后才表示所有监听器结束。";
+    case "defineSyncEvent":
+      return "### `defineSyncEvent<T>`\n\n定义稳定命名的同步 Scene Event。事件描述符可放在 Model，Handler 实现放在 Hotfix。";
+    case "defineAsyncEvent":
+      return "### `defineAsyncEvent<T>`\n\n定义稳定命名的异步 Scene Event。发布时必须等待 `PublishAsync`。";
+    default:
+      return undefined;
+  }
 }
 
 function markdownHover(value: string): Hover {

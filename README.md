@@ -18,6 +18,9 @@ TiangZ 框架的工程模型、静态检查与 VS Code 开发工具。
 - 根据 `codegen.manifest.json` 检测生成文件过期、缺失、遗留或被手工修改。
 - 识别 `@systemFor` 与 `*System.ts`，跟踪 TiangZ 自动生成的 Model 方法声明。
 - 校验`@lifecycle`与`@transferable()`声明，缺少System、同步生命周期方法或迁移方法时在编辑器和CI中报错。
+- 为 Process JSON 提供 Schema 补全，并按 StartMachine 实际部署集合检查 `process.identity` 缺失、范围和重复槽位。
+- 检查 Timer 方法名回调、取消回调签名、未等待的异步 Scene Event，以及运行时 ID 被误写入持久化结构。
+- 识别同步/异步 Scene Event Handler，并为 GlobalId、InstanceId、Timer、协程锁和 Scene Event 提供中文 Hover。
 - 提供与 VS Code Problems 使用相同规则的 `tiangz-check-project` 命令，可直接接入 CI。
 - 从工程树、命令面板或 Proto/Native 文件右键菜单定向运行 Manifest 中的生成器。
 - 独立 Language Server 使用 150ms 防抖，不保留 TypeScript AST，并提供运行状态指标。
@@ -32,6 +35,7 @@ TiangZ 框架的工程模型、静态检查与 VS Code 开发工具。
 - 提供确定性的领域设计规则库，覆盖 Item、Buff、Quest、Achievement、Numeric 及自定义系统。
 - 提供“TiangZ：设计业务系统”向导和 `@tiangz /design` 聊天入口；AI 只解释规则，不改变确定性结论。
 - 提供 `tiangz-design` CLI 和只读 `tiangz-design-mcp`，让终端、CI 与其他 AI 使用同一套规则。
+- 提供“TiangZ：运行 Runtime Foundation 自测”命令，复用主工程 `npm run test:runtime-foundation`。
 
 ## 本地开发
 
@@ -41,7 +45,7 @@ npm run check
 npm run package:extension
 ```
 
-生成的 VSIX 位于 `dist/tiangz-developer-tools-0.13.0.vsix`。
+生成的 VSIX 位于 `dist/tiangz-developer-tools-0.15.0.vsix`。
 
 检查任意 TiangZ 工程：
 
@@ -91,6 +95,8 @@ node dist/tiangz-design.cjs --input .\DesignRequest.json
 `tiangz.performance.unstable-shape`只扫描Model/Hotfix业务运行时类并排除Bench。它是可选的黄色性能建议，不会让普通`tiangz-check-project`失败；CI只有显式传入`--warnings-as-errors`时才提升警告。
 
 `tiangz.architecture.component-public-collection`与`tiangz.architecture.native-ref-in-handler`同样是低噪音黄色建议。前者防止业务绕过 Component 的集合所有权，后者防止 Handler 泄漏可变 Native 句柄；所属 System 和 Bench 仍可按需要直接使用底层能力。
+
+`tiangz.timer.*`、`tiangz.event.*`与`tiangz.persistence.runtime-id`只检查能从单文件语法树确定的问题。插件不会创建第二套工程级 TypeScript 类型检查器，也不会阻止合法的动态业务代码。
 
 ## 领域设计助手
 

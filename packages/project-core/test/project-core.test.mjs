@@ -47,7 +47,7 @@ const sources = [
   {
     relativePath: "configs/local/map1.json",
     text: JSON.stringify({
-      process: { name: "map1" },
+      process: { name: "map1", identity: { originServerId: 1, workerId: 1 } },
       scenes: [{ name: "map_1", sceneType: "MapHost", ip: "127.0.0.1", port: 7301 }],
       knownScenes: [{ name: "gate_1", sceneType: "Gate", ip: "127.0.0.1", port: 7201 }],
     }),
@@ -148,6 +148,59 @@ test("resolves StartMachine process files relative to its environment", () => {
     processes: ["login1.json", "groups/map1.json"],
     relativePath: "configs/local/StartMachine.json",
   }), ["configs/local/login1.json", "configs/local/groups/map1.json"]);
+});
+
+test("validates process identity only for configs referenced by each StartMachine", () => {
+  const snapshot = analyzeTiangZProject([
+    {
+      relativePath: "configs/local/map1.json",
+      text: JSON.stringify({ process: { name: "map1", identity: { originServerId: 9, workerId: 1 } }, scenes: [] }),
+    },
+    {
+      relativePath: "configs/local/map2.json",
+      text: JSON.stringify({ process: { name: "map2", identity: { originServerId: 9, workerId: 2 } }, scenes: [] }),
+    },
+    {
+      relativePath: "configs/local/map1.debug.json",
+      text: JSON.stringify({ process: { name: "map1-debug", identity: { originServerId: 9, workerId: 1 } }, scenes: [] }),
+    },
+    {
+      relativePath: "configs/local/StartMachine.json",
+      text: JSON.stringify({ machines: [{ name: "local", processes: ["map1.json", "map2.json"] }] }),
+    },
+  ]);
+  assert.deepEqual(snapshot.processes[0].identity, { originServerId: 9, workerId: 1 });
+  assert.deepEqual(snapshot.diagnostics, []);
+});
+
+test("reports missing, invalid, and duplicate process identity slots", () => {
+  const snapshot = analyzeTiangZProject([
+    {
+      relativePath: "configs/local/missing.json",
+      text: JSON.stringify({ process: { name: "missing" }, scenes: [] }),
+    },
+    {
+      relativePath: "configs/local/invalid.json",
+      text: JSON.stringify({ process: { name: "invalid", identity: { originServerId: 0, workerId: 128 } }, scenes: [] }),
+    },
+    {
+      relativePath: "configs/local/first.json",
+      text: JSON.stringify({ process: { name: "first", identity: { originServerId: 2, workerId: 3 } }, scenes: [] }),
+    },
+    {
+      relativePath: "configs/local/duplicate.json",
+      text: JSON.stringify({ process: { name: "duplicate", identity: { originServerId: 2, workerId: 3 } }, scenes: [] }),
+    },
+    {
+      relativePath: "configs/local/StartMachine.json",
+      text: JSON.stringify({ machines: [{ name: "local", processes: ["missing.json", "invalid.json", "first.json", "duplicate.json"] }] }),
+    },
+  ]);
+  assert.deepEqual(snapshot.diagnostics.map((diagnostic) => diagnostic.code), [
+    "tiangz.config.missing-process-identity",
+    "tiangz.config.invalid-process-identity",
+    "tiangz.config.duplicate-process-identity",
+  ]);
 });
 
 test("reports config references that cannot be resolved", () => {
@@ -653,6 +706,85 @@ export class ItemComponentSystem extends ItemComponent {}`,
     "tiangz.architecture.native-ref-in-handler",
   ].sort());
   assert.ok(ownershipWarnings.every((diagnostic) => diagnostic.severity === "warning"));
+});
+
+test("accepts valid owned timers and Scene Event handlers", () => {
+  const snapshot = analyzeTiangZProject([{
+    relativePath: "app/hotfix/game/RuntimeFoundationSystem.ts",
+    text: `
+class RuntimeFoundationSystem {
+  Start(): void {
+    this.scene.Time.NewRepeatedTimer(100, "Tick", { value: 1 }, { onCancelled: "Cancelled" });
+    this.scene.Events.Publish(GameEvents.Changed, { value: 1 });
+  }
+  async Publish(): Promise<void> {
+    await this.scene.Events.PublishAsync(GameEvents.Saved, { value: 1 });
+    const pending = this.scene.Events.PublishAsync(GameEvents.Saved, { value: 2 });
+    await pending;
+  }
+  Tick(_args: unknown): void {}
+  Cancelled(_args: unknown, _context: TimerCancellationContext): void {}
+}
+@syncEventHandler(GameScene, GameEvents.Changed)
+class ChangedHandler implements SyncSceneEventHandler<GameScene, ChangedEvent> {
+  Handle(_scene: GameScene, _event: ChangedEvent): void {}
+}
+@asyncEventHandler(GameScene, GameEvents.Saved)
+class SavedHandler implements AsyncSceneEventHandler<GameScene, SavedEvent> {
+  async Handle(_scene: GameScene, _event: SavedEvent): Promise<void> {}
+}`,
+  }]);
+  assert.deepEqual(snapshot.diagnostics.filter((diagnostic) => diagnostic.code.startsWith("tiangz.timer.")
+    || diagnostic.code.startsWith("tiangz.event.")
+    || diagnostic.code === "tiangz.persistence.runtime-id"), []);
+  assert.deepEqual(snapshot.handlers.map(({ kind, messageType }) => ({ kind, messageType })), [
+    { kind: "syncEvent", messageType: "ChangedEvent" },
+    { kind: "asyncEvent", messageType: "SavedEvent" },
+  ]);
+});
+
+test("reports unsafe timer, Scene Event, and persisted runtime-ID usage", () => {
+  const snapshot = analyzeTiangZProject([{
+    relativePath: "app/hotfix/game/BrokenRuntimeFoundation.ts",
+    text: `
+class BrokenRuntimeFoundation {
+  Start(): void {
+    this.scene.Time.NewOnceTimer(100, "MissingTick", undefined, { onCancelled: "MissingCancelled" });
+    this.scene.Time.NewRepeatedTimer(100, "Tick", undefined, { onCancelled: "BadCancelled" });
+    this.scene.Time.RemoveTimer(1n);
+    this.scene.Events.PublishAsync(GameEvents.Saved, {});
+  }
+  Tick(): void {}
+  BadCancelled(_args: unknown): void {}
+}
+@syncEventHandler(GameScene, GameEvents.Changed)
+class BadSyncHandler {
+  async Handle(): Promise<void> {}
+}
+@asyncEventHandler(GameScene, GameEvents.Saved)
+class BadAsyncHandler {
+  Handle(): void {}
+}
+@syncEventHandler(GameScene, GameEvents.Missing)
+class MissingHandleHandler {}
+interface PlayerPersistenceSnapshot {
+  owner: InstanceId;
+  retryTimer: TimerId;
+  playerId: GlobalId;
+}`,
+  }]);
+  assert.deepEqual(snapshot.diagnostics.map((diagnostic) => diagnostic.code), [
+    "tiangz.timer.missing-method",
+    "tiangz.timer.missing-cancel-method",
+    "tiangz.timer.invalid-cancel-method",
+    "tiangz.timer.legacy-remove",
+    "tiangz.event.unawaited-async",
+    "tiangz.event.sync-handler-async",
+    "tiangz.event.async-handler-sync",
+    "tiangz.event.missing-handle",
+    "tiangz.persistence.runtime-id",
+    "tiangz.persistence.runtime-id",
+  ]);
 });
 
 test("accepts generated files that match the codegen manifest", () => {

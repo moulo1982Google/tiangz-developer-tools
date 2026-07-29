@@ -53,9 +53,15 @@ export interface ProcessConfigModel {
   readonly environment: string;
   readonly name: string;
   readonly relativePath: string;
+  readonly identity?: ProcessIdentityConfigModel;
   readonly debug?: ProcessDebugConfigModel;
   readonly scenes: readonly SceneConfigModel[];
   readonly knownScenes: readonly SceneConfigModel[];
+}
+
+export interface ProcessIdentityConfigModel {
+  readonly originServerId: number;
+  readonly workerId: number;
 }
 
 export interface ProcessDebugConfigModel {
@@ -92,6 +98,8 @@ export type HandlerKind =
   | "unitMessage"
   | "actorRpc"
   | "actorMessage"
+  | "syncEvent"
+  | "asyncEvent"
   | "actorMethod";
 
 export interface HandlerModel {
