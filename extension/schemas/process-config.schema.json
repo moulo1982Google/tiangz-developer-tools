@@ -52,6 +52,11 @@
     "knownScenes": {
       "type": "array",
       "items": { "$ref": "#/$defs/scene" }
+    },
+    "knownSceneFiles": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "description": "共享稳定Scene目录文件，相对当前Process配置解析；用于避免每个进程重复knownScenes。"
     }
   },
   "required": ["process"],
@@ -64,7 +69,27 @@
         "name": { "type": "string", "minLength": 1 },
         "sceneType": { "type": "string", "minLength": 1 },
         "ip": { "type": "string" },
-        "port": { "type": "integer", "minimum": 1, "maximum": 65535 }
+        "port": { "type": "integer", "minimum": 1, "maximum": 65535 },
+        "protocol": {
+          "type": "string",
+          "enum": ["auto", "tcp", "websocket", "kcp"],
+          "description": "该Scene端点使用的传输协议。"
+        },
+        "audience": {
+          "type": "string",
+          "enum": ["mixed", "inner", "outer"],
+          "description": "端点面向内网、外网或混合流量。"
+        },
+        "staticMapIds": {
+          "type": "array",
+          "items": { "type": "integer", "minimum": 1 },
+          "uniqueItems": true,
+          "description": "MapHost启动时固定创建的静态地图配置ID；空数组表示不承载静态地图。"
+        },
+        "acceptDynamicMaps": {
+          "type": "boolean",
+          "description": "MapHost是否注册MapManager并接受动态副本分配。"
+        }
       },
       "additionalProperties": true
     }

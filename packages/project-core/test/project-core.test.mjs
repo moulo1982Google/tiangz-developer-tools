@@ -99,6 +99,74 @@ test("builds one project snapshot from configs and TypeScript decorators", () =>
   assert.deepEqual(snapshot.diagnostics, []);
 });
 
+test("expands shared known Scene catalogs for every Process", () => {
+  const snapshot = analyzeTiangZProject([
+    {
+      relativePath: "configs/local/cluster.json",
+      text: JSON.stringify({
+        knownScenes: [
+          { name: "map_manager", sceneType: "MapManager", ip: "127.0.0.1", port: 7100 },
+        ],
+      }),
+    },
+    {
+      relativePath: "configs/local/dungeon1.json",
+      text: JSON.stringify({
+        process: { name: "dungeon1" },
+        scenes: [{
+          name: "dungeon_1",
+          sceneType: "MapHost",
+          ip: "127.0.0.1",
+          port: 7310,
+          staticMapIds: [],
+          acceptDynamicMaps: true,
+        }],
+        knownSceneFiles: ["cluster.json"],
+      }),
+    },
+    {
+      relativePath: "app/model/demo/scenes/MapHostScene.ts",
+      text: `@entryScene() export class MapHostScene {}`,
+    },
+  ]);
+  assert.deepEqual(snapshot.processes[0].knownSceneFiles, ["cluster.json"]);
+  assert.deepEqual(snapshot.processes[0].knownScenes.map((scene) => scene.name), [
+    "dungeon_1",
+    "map_manager",
+  ]);
+  assert.equal(snapshot.processes[0].scenes[0].acceptDynamicMaps, true);
+  assert.deepEqual(snapshot.processes[0].scenes[0].staticMapIds, []);
+  assert.deepEqual(snapshot.diagnostics, []);
+});
+
+test("reports missing and conflicting shared known Scene catalogs", () => {
+  const snapshot = analyzeTiangZProject([
+    {
+      relativePath: "configs/local/cluster.json",
+      text: JSON.stringify({
+        knownScenes: [
+          { name: "map_manager", sceneType: "MapManager", ip: "127.0.0.1", port: 7101 },
+          { name: "other", sceneType: "Location", ip: "127.0.0.1", port: 7100 },
+        ],
+      }),
+    },
+    {
+      relativePath: "configs/local/map1.json",
+      text: JSON.stringify({
+        process: { name: "map1" },
+        scenes: [{ name: "map_manager", sceneType: "MapManager", ip: "127.0.0.1", port: 7100 }],
+        knownSceneFiles: ["cluster.json", "missing.json"],
+      }),
+    },
+  ]);
+  assert.deepEqual(snapshot.diagnostics.map((diagnostic) => diagnostic.code), [
+    "tiangz.config.conflicting-known-scene",
+    "tiangz.config.duplicate-known-scene-endpoint",
+    "tiangz.config.missing-known-scene-file",
+    "tiangz.config.unknown-entry-scene",
+  ]);
+});
+
 test("indexes Process Inspector configuration", () => {
   const snapshot = analyzeTiangZProject([{
     relativePath: "configs/local/debug.json",

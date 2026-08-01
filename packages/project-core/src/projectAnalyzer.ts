@@ -92,6 +92,8 @@ export function analyzeTiangZProject(sources: readonly ProjectSource[]): TiangZP
     }
   }
 
+  resolveKnownSceneFiles(sources, processes, diagnostics);
+
   validateGeneratedIntegrity(sources, diagnostics);
   validateLifecycleContracts(lifecycleModels, lifecycleSystems, diagnostics);
   resolveProtocolCodes(protocols, msgcodes);
@@ -158,8 +160,103 @@ function analyzeConfig(
     ...(identity ? { identity } : {}),
     ...(debug ? { debug } : {}),
     scenes: sceneConfigs(value.scenes),
+    knownSceneFiles: stringArray(value.knownSceneFiles),
     knownScenes: sceneConfigs(value.knownScenes),
   });
+}
+
+/** 展开共享Scene目录，并复用Runtime的同名、同端点冲突语义。 / Expands shared Scene catalogs using the Runtime's name and endpoint conflict rules. */
+function resolveKnownSceneFiles(
+  sources: readonly ProjectSource[],
+  processes: ProcessConfigModel[],
+  diagnostics: ProjectDiagnostic[],
+): void {
+  const sourcesByPath = new Map(
+    sources.map((source) => [normalizePath(source.relativePath), source]),
+  );
+  for (let index = 0; index < processes.length; index += 1) {
+    const process = processes[index]!;
+    const merged = [...process.scenes];
+    for (const knownSceneFile of process.knownSceneFiles) {
+      const sharedPath = path.posix.normalize(path.posix.join(
+        path.posix.dirname(process.relativePath),
+        knownSceneFile.replaceAll("\\", "/"),
+      ));
+      const source = sourcesByPath.get(sharedPath);
+      if (!source) {
+        diagnostics.push({
+          code: "tiangz.config.missing-known-scene-file",
+          severity: "error",
+          message: `${process.name}引用的共享Scene目录不存在：${knownSceneFile}`,
+          location: fileLocation(process.relativePath),
+        });
+        continue;
+      }
+      let value: unknown;
+      try {
+        value = JSON.parse(source.text);
+      } catch {
+        // analyzeConfig已经为这份JSON生成精确诊断，避免重复报告。
+        continue;
+      }
+      if (!isRecord(value) || !Array.isArray(value.knownScenes)) {
+        diagnostics.push({
+          code: "tiangz.config.invalid-known-scene-file",
+          severity: "error",
+          message: `共享Scene目录必须包含knownScenes数组：${knownSceneFile}`,
+          location: fileLocation(sharedPath),
+        });
+        continue;
+      }
+      mergeKnownScenes(merged, sceneConfigs(value.knownScenes), sharedPath, process, diagnostics);
+    }
+    mergeKnownScenes(merged, process.knownScenes, process.relativePath, process, diagnostics);
+    processes[index] = { ...process, knownScenes: merged };
+  }
+}
+
+function mergeKnownScenes(
+  merged: SceneConfigModel[],
+  additions: readonly SceneConfigModel[],
+  sourcePath: string,
+  process: ProcessConfigModel,
+  diagnostics: ProjectDiagnostic[],
+): void {
+  for (const addition of additions) {
+    const sameName = merged.find((scene) => scene.name === addition.name);
+    if (sameName) {
+      if (sameSceneRoute(sameName, addition)) continue;
+      diagnostics.push({
+        code: "tiangz.config.conflicting-known-scene",
+        severity: "error",
+        message: `${process.name}合并${sourcePath}时，Scene ${addition.name}与已有路由冲突`,
+        location: fileLocation(process.relativePath),
+      });
+      continue;
+    }
+    const sameEndpoint = addition.ip !== undefined && addition.port !== undefined
+      ? merged.find((scene) => scene.ip === addition.ip && scene.port === addition.port)
+      : undefined;
+    if (sameEndpoint) {
+      diagnostics.push({
+        code: "tiangz.config.duplicate-known-scene-endpoint",
+        severity: "error",
+        message: `${process.name}合并${sourcePath}时，${addition.name}复用了${sameEndpoint.name}的端点${addition.ip}:${addition.port}`,
+        location: fileLocation(process.relativePath),
+      });
+      continue;
+    }
+    merged.push(addition);
+  }
+}
+
+function sameSceneRoute(left: SceneConfigModel, right: SceneConfigModel): boolean {
+  return left.name === right.name
+    && left.sceneType === right.sceneType
+    && left.ip === right.ip
+    && left.port === right.port
+    && (left.protocol ?? "auto") === (right.protocol ?? "auto")
+    && (left.audience ?? "mixed") === (right.audience ?? "mixed");
 }
 
 function processIdentityConfig(value: unknown) {
@@ -1302,8 +1399,16 @@ function sceneConfigs(value: unknown): SceneConfigModel[] {
       sceneType: item.sceneType,
       ...(typeof item.ip === "string" ? { ip: item.ip } : {}),
       ...(typeof item.port === "number" ? { port: item.port } : {}),
+      ...(typeof item.protocol === "string" ? { protocol: item.protocol } : {}),
+      ...(typeof item.audience === "string" ? { audience: item.audience } : {}),
+      staticMapIds: numberArray(item.staticMapIds),
+      acceptDynamicMaps: item.acceptDynamicMaps === true,
     }];
   });
+}
+
+function numberArray(value: unknown): number[] {
+  return Array.isArray(value) ? value.filter((item): item is number => typeof item === "number") : [];
 }
 
 function decoratorsOf(node: ts.Node): readonly ts.Decorator[] {

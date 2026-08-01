@@ -47,6 +47,10 @@ export interface SceneConfigModel {
   readonly sceneType: string;
   readonly ip?: string;
   readonly port?: number;
+  readonly protocol?: string;
+  readonly audience?: string;
+  readonly staticMapIds: readonly number[];
+  readonly acceptDynamicMaps: boolean;
 }
 
 export interface ProcessConfigModel {
@@ -56,6 +60,7 @@ export interface ProcessConfigModel {
   readonly identity?: ProcessIdentityConfigModel;
   readonly debug?: ProcessDebugConfigModel;
   readonly scenes: readonly SceneConfigModel[];
+  readonly knownSceneFiles: readonly string[];
   readonly knownScenes: readonly SceneConfigModel[];
 }
 

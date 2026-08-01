@@ -6,7 +6,7 @@ TiangZ 框架的工程模型、静态检查与 VS Code 开发工具。
 
 ## 当前能力
 
-- 扫描 `configs/<环境>/**/*.json`，建立 Environment、Machine、Process 和入口 Scene 模型。
+- 扫描 `configs/<环境>/**/*.json`，展开`knownSceneFiles`共享启动目录，建立 Environment、Machine、Process 和入口 Scene 模型。
 - 使用 TypeScript Compiler API 识别 `@entryScene`、`@scene`、`@component`，并兼容旧版 `@actor`。
 - 从服务端生成文件索引 RPC、Message、Request、Response、MsgCode 与 Descriptor。
 - 识别 Scene、Session、Unit 类 Handler，以及 `@rpc`、`@message`、`@handler` 方法；兼容旧版 Actor Handler 与 `registerActorRpc`。
@@ -18,7 +18,7 @@ TiangZ 框架的工程模型、静态检查与 VS Code 开发工具。
 - 根据 `codegen.manifest.json` 检测生成文件过期、缺失、遗留或被手工修改。
 - 识别 `@systemFor` 与 `*System.ts`，跟踪 TiangZ 自动生成的 Model 方法声明。
 - 校验`@lifecycle`与`@transferable()`声明，缺少System、同步生命周期方法或迁移方法时在编辑器和CI中报错。
-- 为 Process JSON 提供 Schema 补全，并按 StartMachine 实际部署集合检查 `process.identity` 缺失、范围和重复槽位。
+- 为 Process JSON 提供 Schema 补全，包括MapHost静态/动态承载角色；按 StartMachine 实际部署集合检查 `process.identity` 缺失、范围和重复槽位。
 - 检查 Timer 方法名回调、取消回调签名、未等待的异步 Scene Event，以及运行时 ID 被误写入持久化结构。
 - 识别同步/异步 Scene Event Handler，并为 GlobalId、InstanceId、Timer、协程锁和 Scene Event 提供中文 Hover。
 - 提供与 VS Code Problems 使用相同规则的 `tiangz-check-project` 命令，可直接接入 CI。

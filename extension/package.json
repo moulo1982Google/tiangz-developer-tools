@@ -354,9 +354,14 @@
       {
         "fileMatch": [
           "configs/**/*.json",
-          "!configs/**/StartMachine.json"
+          "!configs/**/StartMachine.json",
+          "!configs/**/*.known-scenes.json"
         ],
         "url": "./schemas/process-config.schema.json"
+      },
+      {
+        "fileMatch": "configs/**/*.known-scenes.json",
+        "url": "./schemas/known-scenes.schema.json"
       },
       {
         "fileMatch": "configs/**/StartMachine.json",

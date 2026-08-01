@@ -2,6 +2,9 @@
 
 ## 未发布
 
+- 支持`knownSceneFiles`共享稳定Scene目录，工程索引与Runtime采用一致的相对路径、去重和冲突检查语义，并为`*.known-scenes.json`提供独立Schema。
+- Process JSON补全增加`staticMapIds`、`acceptDynamicMaps`、`protocol`与`audience`，明确同一种MapHost的静态、动态和混合承载角色。
+
 ## 0.15.0
 
 - 增加`process.identity` JSON补全与静态检查：按每份StartMachine真实引用的部署集合检查缺失、范围错误和重复ID槽位。
