@@ -213,7 +213,7 @@ function processNode(
     process,
     children: process.scenes.map((scene) => ({
       label: scene.name,
-      description: `${scene.sceneType}${scene.ip ? `  ${scene.ip}:${scene.port ?? 0}` : ""}`,
+      description: `${scene.sceneType}${(scene.innerIp ?? scene.ip) ? `  ${scene.innerIp ?? scene.ip}:${scene.port ?? 0}` : ""}`,
       icon: "symbol-namespace",
       location: { relativePath: process.relativePath, line: 0, character: 0 },
       children: [],

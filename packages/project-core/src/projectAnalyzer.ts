@@ -225,7 +225,21 @@ function mergeKnownScenes(
   for (const addition of additions) {
     const sameName = merged.find((scene) => scene.name === addition.name);
     if (sameName) {
-      if (sameSceneRoute(sameName, addition)) continue;
+      if (sameSceneRoute(sameName, addition)) {
+        const sameNameIndex = merged.indexOf(sameName);
+        const mergedScene = mergeSceneClientEndpoint(sameName, addition);
+        if (mergedScene) {
+          merged[sameNameIndex] = mergedScene;
+          continue;
+        }
+        diagnostics.push({
+          code: "tiangz.config.conflicting-known-scene",
+          severity: "error",
+          message: `${process.name}合并${sourcePath}时，Scene ${addition.name}的outerIp/outerPort不一致`,
+          location: fileLocation(process.relativePath),
+        });
+        continue;
+      }
       diagnostics.push({
         code: "tiangz.config.conflicting-known-scene",
         severity: "error",
@@ -234,14 +248,15 @@ function mergeKnownScenes(
       });
       continue;
     }
-    const sameEndpoint = addition.ip !== undefined && addition.port !== undefined
-      ? merged.find((scene) => scene.ip === addition.ip && scene.port === addition.port)
+    const additionIp = sceneInnerIp(addition);
+    const sameEndpoint = additionIp !== undefined && addition.port !== undefined
+      ? merged.find((scene) => sceneInnerIp(scene) === additionIp && scene.port === addition.port)
       : undefined;
     if (sameEndpoint) {
       diagnostics.push({
         code: "tiangz.config.duplicate-known-scene-endpoint",
         severity: "error",
-        message: `${process.name}合并${sourcePath}时，${addition.name}复用了${sameEndpoint.name}的端点${addition.ip}:${addition.port}`,
+        message: `${process.name}合并${sourcePath}时，${addition.name}复用了${sameEndpoint.name}的端点${additionIp}:${addition.port}`,
         location: fileLocation(process.relativePath),
       });
       continue;
@@ -253,10 +268,31 @@ function mergeKnownScenes(
 function sameSceneRoute(left: SceneConfigModel, right: SceneConfigModel): boolean {
   return left.name === right.name
     && left.sceneType === right.sceneType
-    && left.ip === right.ip
+    && sceneInnerIp(left) === sceneInnerIp(right)
     && left.port === right.port
     && (left.protocol ?? "auto") === (right.protocol ?? "auto")
     && (left.audience ?? "mixed") === (right.audience ?? "mixed");
+}
+
+function mergeSceneClientEndpoint(
+  left: SceneConfigModel,
+  right: SceneConfigModel,
+): SceneConfigModel | undefined {
+  if (left.outerIp !== undefined && right.outerIp !== undefined && left.outerIp !== right.outerIp) {
+    return undefined;
+  }
+  if (left.outerPort !== undefined && right.outerPort !== undefined && left.outerPort !== right.outerPort) {
+    return undefined;
+  }
+  return {
+    ...left,
+    ...(left.outerIp === undefined && right.outerIp !== undefined ? { outerIp: right.outerIp } : {}),
+    ...(left.outerPort === undefined && right.outerPort !== undefined ? { outerPort: right.outerPort } : {}),
+  };
+}
+
+function sceneInnerIp(scene: SceneConfigModel): string | undefined {
+  return scene.innerIp ?? scene.ip;
 }
 
 function processIdentityConfig(value: unknown) {
@@ -1397,6 +1433,10 @@ function sceneConfigs(value: unknown): SceneConfigModel[] {
     return [{
       name: item.name,
       sceneType: item.sceneType,
+      ...(typeof item.innerIp === "string" ? { innerIp: item.innerIp } : {}),
+      ...(typeof item.bindIp === "string" ? { bindIp: item.bindIp } : {}),
+      ...(typeof item.outerIp === "string" ? { outerIp: item.outerIp } : {}),
+      ...(typeof item.outerPort === "number" ? { outerPort: item.outerPort } : {}),
       ...(typeof item.ip === "string" ? { ip: item.ip } : {}),
       ...(typeof item.port === "number" ? { port: item.port } : {}),
       ...(typeof item.protocol === "string" ? { protocol: item.protocol } : {}),

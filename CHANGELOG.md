@@ -2,6 +2,7 @@
 
 ## 未发布
 
+- Process/Scene配置补全和工程索引支持`bindIp`、`innerIp`、`outerIp`与`outerPort`，并兼容旧`ip`；明确监听地址、服务间路由地址和客户端地址不能混用。
 - 支持`knownSceneFiles`共享稳定Scene目录，工程索引与Runtime采用一致的相对路径、去重和冲突检查语义，并为`*.known-scenes.json`提供独立Schema。
 - Process JSON补全增加`staticMapIds`、`acceptDynamicMaps`、`protocol`与`audience`，明确同一种MapHost的静态、动态和混合承载角色。
 

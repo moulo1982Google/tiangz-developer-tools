@@ -45,6 +45,11 @@ export interface ProtocolDescriptorModel {
 export interface SceneConfigModel {
   readonly name: string;
   readonly sceneType: string;
+  readonly innerIp?: string;
+  readonly bindIp?: string;
+  readonly outerIp?: string;
+  readonly outerPort?: number;
+  /** 兼容旧配置；新配置使用 innerIp。 / Legacy compatibility; new configs use innerIp. */
   readonly ip?: string;
   readonly port?: number;
   readonly protocol?: string;

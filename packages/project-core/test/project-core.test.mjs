@@ -99,6 +99,39 @@ test("builds one project snapshot from configs and TypeScript decorators", () =>
   assert.deepEqual(snapshot.diagnostics, []);
 });
 
+test("indexes split listener, inner and outer scene addresses", () => {
+  const snapshot = analyzeTiangZProject([{
+    relativePath: "configs/cloud/gate.json",
+    text: JSON.stringify({
+      process: { name: "cloud-gate" },
+      scenes: [{
+        name: "gate_1",
+        sceneType: "Gate",
+        innerIp: "10.0.0.5",
+        bindIp: "0.0.0.0",
+        outerIp: "203.0.113.10",
+        outerPort: 17201,
+        port: 7201,
+      }],
+    }),
+  }, {
+    relativePath: "app/model/scenes/GateScene.ts",
+    text: "@entryScene() export class GateScene {}",
+  }]);
+  assert.deepEqual(snapshot.processes[0].scenes[0], {
+    name: "gate_1",
+    sceneType: "Gate",
+    innerIp: "10.0.0.5",
+    bindIp: "0.0.0.0",
+    outerIp: "203.0.113.10",
+    outerPort: 17201,
+    port: 7201,
+    staticMapIds: [],
+    acceptDynamicMaps: false,
+  });
+  assert.deepEqual(snapshot.diagnostics, []);
+});
+
 test("expands shared known Scene catalogs for every Process", () => {
   const snapshot = analyzeTiangZProject([
     {

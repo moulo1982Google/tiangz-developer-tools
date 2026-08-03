@@ -9,11 +9,19 @@
       "description": "稳定启动Scene目录；动态MapHost通过MapManager注册，不写入这里。",
       "items": {
         "type": "object",
-        "required": ["name", "sceneType", "ip", "port"],
+        "required": ["name", "sceneType", "port"],
+        "anyOf": [
+          { "required": ["innerIp"] },
+          { "required": ["ip"] }
+        ],
         "properties": {
           "name": { "type": "string", "minLength": 1 },
           "sceneType": { "type": "string", "minLength": 1 },
-          "ip": { "type": "string", "minLength": 1 },
+          "innerIp": { "type": "string", "minLength": 1, "description": "服务间通信地址。" },
+          "bindIp": { "type": "string", "minLength": 1, "description": "本机监听地址；只用于实际 Process 配置。" },
+          "outerIp": { "type": "string", "minLength": 1, "description": "客户端连接地址。" },
+          "outerPort": { "type": "integer", "minimum": 1, "maximum": 65535, "description": "客户端连接端口。" },
+          "ip": { "type": "string", "minLength": 1, "description": "兼容旧配置的内网通信地址；新配置请使用 innerIp。" },
           "port": { "type": "integer", "minimum": 1, "maximum": 65535 },
           "protocol": { "type": "string", "enum": ["auto", "tcp", "websocket", "kcp"] },
           "audience": { "type": "string", "enum": ["mixed", "inner", "outer"] }

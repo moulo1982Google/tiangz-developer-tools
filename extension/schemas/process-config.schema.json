@@ -68,7 +68,28 @@
       "properties": {
         "name": { "type": "string", "minLength": 1 },
         "sceneType": { "type": "string", "minLength": 1 },
-        "ip": { "type": "string" },
+        "innerIp": {
+          "type": "string",
+          "description": "服务间通信地址；旧配置可使用 ip，但新配置应使用 innerIp。"
+        },
+        "bindIp": {
+          "type": "string",
+          "description": "本机监听地址；云服务器通常填写 0.0.0.0，不能作为服务路由或客户端地址。"
+        },
+        "outerIp": {
+          "type": "string",
+          "description": "客户端连接地址；LoginMgr/Login/Gate 返回该地址。"
+        },
+        "outerPort": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535,
+          "description": "客户端连接端口；省略时沿用 port。"
+        },
+        "ip": {
+          "type": "string",
+          "description": "兼容旧配置的内网通信地址；新配置请使用 innerIp。"
+        },
         "port": { "type": "integer", "minimum": 1, "maximum": 65535 },
         "protocol": {
           "type": "string",
