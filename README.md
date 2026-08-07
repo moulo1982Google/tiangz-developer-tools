@@ -125,3 +125,7 @@ node dist/tiangz-design.cjs --input .\DesignRequest.json
 `packages/project-core` 同时被 Language Server 与 CLI 调用，因此编辑器和 CI 使用同一套工程规则。运行时 Inspector 尚未实现，后续会作为独立阶段推进。
 
 详细设计见 [架构设计](docs/architecture.md)，后续顺序见 [路线图](docs/roadmap.md)。
+
+## 开源协议
+
+TiangZ Developer Tools 使用 [Apache License 2.0](LICENSE) 开源，版权归 2025-2026 郑昕 所有。分发或修改本项目时，请同时保留 [NOTICE](NOTICE) 中的版权与归属声明。

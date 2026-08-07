@@ -3,7 +3,7 @@
   "version": "0.15.0",
   "description": "TiangZ 工程模型、静态索引与 VS Code 开发工具",
   "author": "moulo",
-  "license": "MIT",
+  "license": "Apache-2.0",
   "repository": {
     "type": "git",
     "url": "https://github.com/moulo1982Google/tiangz-developer-tools.git"
@@ -36,7 +36,8 @@
     "dist/tiangz-design-mcp.cjs",
     "dist/tiangz-design-mcp.cjs.map",
     "README.md",
-    "LICENSE"
+    "LICENSE",
+    "NOTICE"
   ],
   "workspaces": [
     "extension"
