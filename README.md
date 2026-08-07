@@ -48,6 +48,7 @@ npm run package:extension
 ```
 
 生成的 VSIX 位于 `dist/tiangz-developer-tools-0.15.0.vsix`。
+GitHub Actions 会在 Windows、Ubuntu 上执行同一套 `npm run check`，并提供可下载的 VSIX artifact。
 
 检查任意 TiangZ 工程：
 
