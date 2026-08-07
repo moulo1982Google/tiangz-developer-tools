@@ -109,7 +109,7 @@ export type HandlerKind =
   | "actorRpc"
   | "actorMessage"
   | "syncEvent"
-  | "asyncEvent"
+  | "vetoEvent"
   | "actorMethod";
 
 export interface HandlerModel {

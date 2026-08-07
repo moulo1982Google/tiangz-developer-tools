@@ -463,6 +463,28 @@ function describeRuntimeFoundationSymbol(word: string, expression: string): stri
         "",
         "主动中断 Timer。若创建时配置 `onCancelled`，框架会立即回调 `(args, context)`，其中 `context.reason` 表示中断原因。正常到期不会触发取消回调。",
       ].join("\n");
+    case "Unit":
+      return [
+        "### `Unit`（普通地图实体）",
+        "",
+        "默认没有 Mailbox、Actor 路由或网络地址，适合由地图批量更新的怪物、NPC和场景物件。",
+        "",
+        "需要直接接收 Unit RPC/Message 时不要给它直接加 `@actor`，应改为继承 `ActorUnit`。",
+      ].join("\n");
+    case "ActorUnit":
+      return [
+        "### `ActorUnit`（可路由 Unit）",
+        "",
+        "拥有独立 Actor Mailbox、InstanceId 路由和 Actor Timer。PlayerUnit 这类需要跨 `await` 串行的权威对象使用它。",
+        "",
+        "必须同时显式声明 `@actor({ mailbox: \"ordered\" })`；批量更新的怪物不要继承它。",
+      ].join("\n");
+    case "UnitComponent":
+      return [
+        "### `UnitComponent`",
+        "",
+        "统一索引普通 Unit 与 ActorUnit。业务始终调用 `Create/Get/Remove`，框架根据类型声明决定是否创建 Actor Mailbox。",
+      ].join("\n");
     case "Locks":
     case "RunExclusive":
       if (!expression.includes("Locks") && word === "RunExclusive") return undefined;
@@ -477,18 +499,34 @@ function describeRuntimeFoundationSymbol(word: string, expression: string): stri
       return [
         "### Scene Event",
         "",
-        "`scene.Events` 只能发布到当前 Scene。同步事件使用 `Publish`；异步事件使用 `await PublishAsync`。跨 Scene 协作请用 RPC、Actor 消息或 Location 路由。",
+        "`scene.Events` 只能作用于当前 Scene。事后同步通知使用 `Publish`；操作前同步否决使用 `Check`。TiangZ 不提供异步 Event，跨 Scene 协作请用 RPC、Actor 消息或 Location 路由。",
       ].join("\n");
     case "Publish":
       if (!expression.includes("Events.Publish")) return undefined;
       return "### `Events.Publish`\n\n同步发布当前 Scene 内事件；所有 Handler 必须同步返回。";
-    case "PublishAsync":
-      if (!expression.includes("Events.PublishAsync")) return undefined;
-      return "### `Events.PublishAsync`\n\n异步发布当前 Scene 内事件；调用方必须 `await` 或直接 `return`，完成后才表示所有监听器结束。";
+    case "Check":
+      if (!expression.includes("Events.Check")) return undefined;
+      return [
+        "### `Events.Check`",
+        "",
+        "同步执行当前 Scene 的 Veto Event。监听器按 `order/id` 排序，第一个非放行错误码立即返回。",
+        "",
+        "Veto Handler 只能读取状态，不能扣道具、改 Numeric、加 Buff、执行 I/O 或返回 Promise。",
+      ].join("\n");
     case "defineSyncEvent":
       return "### `defineSyncEvent<T>`\n\n定义稳定命名的同步 Scene Event。事件描述符可放在 Model，Handler 实现放在 Hotfix。";
-    case "defineAsyncEvent":
-      return "### `defineAsyncEvent<T>`\n\n定义稳定命名的异步 Scene Event。发布时必须等待 `PublishAsync`。";
+    case "defineVetoEvent":
+      return "### `defineVetoEvent<TEvent, TReason>`\n\n定义同步否决事件和放行码。通常放行码为 `0`，Handler 返回第一个非零业务错误码时停止后续检查。";
+    case "Tasks":
+    case "Spawn":
+      if (!expression.includes("Tasks") && word === "Spawn") return undefined;
+      return [
+        "### `scene.Tasks.Spawn`",
+        "",
+        "启动调用方不等待的有界短异步任务。框架统一记录异常，并把任务计入 Hotfix 排空；Scene 销毁时更新轻量 `SceneTaskSignal` 请求协作取消。",
+        "",
+        "不要用于否决检查、事务、玩家有序状态、精确定时或永久循环。需要明确完成结果时仍应 `await`。",
+      ].join("\n");
     default:
       return undefined;
   }

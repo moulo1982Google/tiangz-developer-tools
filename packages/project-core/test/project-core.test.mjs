@@ -720,6 +720,34 @@ export class PlayerUnit extends Unit {
   assert.deepEqual(snapshot.diagnostics, []);
 });
 
+test("enforces explicit Unit and ActorUnit mailbox ownership", () => {
+  const valid = analyzeTiangZProject([{
+    relativePath: "app/model/game/Units.ts",
+    text: `
+@actor({ mailbox: "ordered" })
+class PlayerUnit extends ActorUnit {}
+class MonsterUnit extends Unit {}`,
+  }]);
+  assert.deepEqual(
+    valid.diagnostics.filter((diagnostic) => diagnostic.code.startsWith("tiangz.actor.unit")),
+    [],
+  );
+
+  const invalid = analyzeTiangZProject([{
+    relativePath: "app/model/game/Units.ts",
+    text: `
+@actor({ mailbox: "ordered" })
+class WrongMonsterUnit extends Unit {}
+class ForgottenPlayerUnit extends ActorUnit {}`,
+  }]);
+  assert.deepEqual(
+    invalid.diagnostics
+      .filter((diagnostic) => diagnostic.code.startsWith("tiangz.actor.unit"))
+      .map((diagnostic) => diagnostic.code),
+    ["tiangz.actor.unit-base", "tiangz.actor.unit-missing-decorator"],
+  );
+});
+
 test("validates declared Model lifecycle and transfer methods against Hotfix Systems", () => {
   const incomplete = analyzeTiangZProject([
     {
@@ -809,7 +837,7 @@ export class ItemComponentSystem extends ItemComponent {}`,
   assert.ok(ownershipWarnings.every((diagnostic) => diagnostic.severity === "warning"));
 });
 
-test("accepts valid owned timers and Scene Event handlers", () => {
+test("accepts valid owned timers, synchronous Scene Events, and Spawn", () => {
   const snapshot = analyzeTiangZProject([{
     relativePath: "app/hotfix/game/RuntimeFoundationSystem.ts",
     text: `
@@ -817,22 +845,20 @@ class RuntimeFoundationSystem {
   Start(): void {
     this.scene.Time.NewRepeatedTimer(100, "Tick", { value: 1 }, { onCancelled: "Cancelled" });
     this.scene.Events.Publish(GameEvents.Changed, { value: 1 });
+    const reason = this.scene.Events.Check(GameEvents.BeforeSave, { value: 2 });
+    this.scene.Tasks.Spawn("warm-cache", async ({ signal }) => this.Warm(signal));
   }
-  async Publish(): Promise<void> {
-    await this.scene.Events.PublishAsync(GameEvents.Saved, { value: 1 });
-    const pending = this.scene.Events.PublishAsync(GameEvents.Saved, { value: 2 });
-    await pending;
-  }
+  async Warm(_signal: SceneTaskSignal): Promise<void> {}
   Tick(_args: unknown): void {}
   Cancelled(_args: unknown, _context: TimerCancellationContext): void {}
 }
-@syncEventHandler(GameScene, GameEvents.Changed)
+@syncEventHandler(GameScene, GameEvents.Changed, { id: "game.changed" })
 class ChangedHandler implements SyncSceneEventHandler<GameScene, ChangedEvent> {
   Handle(_scene: GameScene, _event: ChangedEvent): void {}
 }
-@asyncEventHandler(GameScene, GameEvents.Saved)
-class SavedHandler implements AsyncSceneEventHandler<GameScene, SavedEvent> {
-  async Handle(_scene: GameScene, _event: SavedEvent): Promise<void> {}
+@vetoEventHandler(GameScene, GameEvents.BeforeSave, { id: "game.before-save", order: 10 })
+class BeforeSaveHandler implements VetoSceneEventHandler<GameScene, BeforeSaveEvent, number> {
+  Handle(_scene: GameScene, _event: BeforeSaveEvent): number { return 0; }
 }`,
   }]);
   assert.deepEqual(snapshot.diagnostics.filter((diagnostic) => diagnostic.code.startsWith("tiangz.timer.")
@@ -840,7 +866,7 @@ class SavedHandler implements AsyncSceneEventHandler<GameScene, SavedEvent> {
     || diagnostic.code === "tiangz.persistence.runtime-id"), []);
   assert.deepEqual(snapshot.handlers.map(({ kind, messageType }) => ({ kind, messageType })), [
     { kind: "syncEvent", messageType: "ChangedEvent" },
-    { kind: "asyncEvent", messageType: "SavedEvent" },
+    { kind: "vetoEvent", messageType: "BeforeSaveEvent" },
   ]);
 });
 
@@ -857,16 +883,19 @@ class BrokenRuntimeFoundation {
   }
   Tick(): void {}
   BadCancelled(_args: unknown): void {}
+  Update(): void {
+    this.scene.Tasks.Spawn("bad-update-task", async () => {});
+  }
 }
 @syncEventHandler(GameScene, GameEvents.Changed)
 class BadSyncHandler {
   async Handle(): Promise<void> {}
 }
-@asyncEventHandler(GameScene, GameEvents.Saved)
-class BadAsyncHandler {
-  Handle(): void {}
+@vetoEventHandler(GameScene, GameEvents.BeforeSave, { id: "game.before-save" })
+class BadVetoHandler {
+  Handle(): string { return "bad"; }
 }
-@syncEventHandler(GameScene, GameEvents.Missing)
+@syncEventHandler(GameScene, GameEvents.Missing, { id: "game.missing" })
 class MissingHandleHandler {}
 interface PlayerPersistenceSnapshot {
   owner: InstanceId;
@@ -879,9 +908,11 @@ interface PlayerPersistenceSnapshot {
     "tiangz.timer.missing-cancel-method",
     "tiangz.timer.invalid-cancel-method",
     "tiangz.timer.legacy-remove",
-    "tiangz.event.unawaited-async",
+    "tiangz.event.async-removed",
+    "tiangz.task.spawn-in-update",
     "tiangz.event.sync-handler-async",
-    "tiangz.event.async-handler-sync",
+    "tiangz.event.missing-stable-id",
+    "tiangz.event.veto-return",
     "tiangz.event.missing-handle",
     "tiangz.persistence.runtime-id",
     "tiangz.persistence.runtime-id",

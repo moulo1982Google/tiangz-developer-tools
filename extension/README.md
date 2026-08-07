@@ -11,8 +11,10 @@
 - Generated 过期、缺失、遗留与手工修改诊断。
 - Model声明的生命周期与迁移能力缺失System、方法或同步实现时发布错误诊断。
 - Process配置JSON补全，以及StartMachine部署集合内`process.identity`唯一性诊断。
-- Timer回调、取消语义、Scene Event同步/异步契约和持久化运行时ID诊断。
-- GlobalId、InstanceId、Timer、协程锁与Scene Event中文Hover。
+- Timer回调、取消语义、同步/Veto Scene Event契约和持久化运行时ID诊断。
+- 普通`Unit`误加`@actor`、`ActorUnit`遗漏`@actor`的错误诊断。
+- GlobalId、InstanceId、Timer、协程锁、Veto Event与`scene.Tasks.Spawn`中文Hover。
+- `Unit`、`ActorUnit`与`UnitComponent`的创建、路由和mailbox边界Hover。
 - 与 `tiangz-check-project` CLI 共用工程规则，编辑器与 CI 诊断一致。
 - 从工程树、命令面板或文件右键菜单定向生成 Proto、Native、Scene 和客户端 Handler。
 - “TiangZ：显示语言服务器状态”性能观测命令。

@@ -40,7 +40,7 @@ const CLASS_HANDLER_DECORATORS = new Map<string, HandlerKind>([
   ["actorRpcHandler", "actorRpc"],
   ["actorMessageHandler", "actorMessage"],
   ["syncEventHandler", "syncEvent"],
-  ["asyncEventHandler", "asyncEvent"],
+  ["vetoEventHandler", "vetoEvent"],
 ]);
 
 interface LifecycleModelContract {
@@ -354,6 +354,12 @@ function analyzeTypeScript(
   function visit(node: ts.Node): void {
     if (ts.isClassDeclaration(node) && node.name) {
       analyzeClass(sourceFile, source.relativePath, node, declarations, handlers);
+      validateUnitActorDeclaration(
+        sourceFile,
+        source.relativePath,
+        node,
+        diagnostics,
+      );
       collectLifecycleContract(
         sourceFile,
         source.relativePath,
@@ -364,6 +370,57 @@ function analyzeTypeScript(
       );
     }
     ts.forEachChild(node, visit);
+  }
+}
+
+/**
+ * 检查Unit与Actor能力是否显式对齐。
+ * 普通Unit不能声明@actor，ActorUnit也不能遗漏@actor，否则UnitComponent.Create
+ * 会在启动阶段拒绝这种含糊类型。
+ *
+ * Validates the explicit Unit/Actor capability boundary. Plain Units cannot
+ * declare @actor and ActorUnits cannot omit it; UnitComponent.Create rejects
+ * either ambiguous combination during startup.
+ */
+function validateUnitActorDeclaration(
+  sourceFile: ts.SourceFile,
+  relativePath: string,
+  declaration: ts.ClassDeclaration,
+  diagnostics: ProjectDiagnostic[],
+): void {
+  const heritage = declaration.heritageClauses?.find(
+    (clause) => clause.token === ts.SyntaxKind.ExtendsKeyword,
+  );
+  const baseName = heritage?.types[0]?.expression.getText(sourceFile) ?? "";
+  if (baseName !== "Unit" && baseName !== "ActorUnit") return;
+
+  const actorDecorator = decoratorsOf(declaration).find((decorator) => {
+    const call = decoratorCall(decorator);
+    return expressionName(call?.expression ?? decorator.expression) === "actor";
+  });
+  if (baseName === "Unit" && actorDecorator) {
+    diagnostics.push({
+      code: "tiangz.actor.unit-base",
+      severity: "error",
+      message: "普通 Unit 没有 Mailbox；需要 Actor 路由时请继承 ActorUnit，否则删除 @actor。",
+      location: sourceLocation(
+        sourceFile,
+        actorDecorator.getStart(sourceFile),
+        relativePath,
+      ),
+    });
+  }
+  if (baseName === "ActorUnit" && !actorDecorator) {
+    diagnostics.push({
+      code: "tiangz.actor.unit-missing-decorator",
+      severity: "error",
+      message: "ActorUnit 必须显式声明 @actor({ mailbox: ... })，不能依赖默认 Mailbox。",
+      location: sourceLocation(
+        sourceFile,
+        declaration.name!.getStart(sourceFile),
+        relativePath,
+      ),
+    });
   }
 }
 
@@ -566,7 +623,7 @@ function validateOwnedComponentBoundaries(
   }
 }
 
-/** 校验Timer、Scene Event和持久化运行时ID的高置信用法。 / Validates high-confidence Timer, Scene Event, and persisted runtime-ID usage. */
+/** 校验Timer、同步Scene Event和持久化运行时ID的高置信用法。 / Validates high-confidence Timer, synchronous Scene Event, and persisted runtime-ID usage. */
 function validateRuntimeFoundationUsage(
   sourceFile: ts.SourceFile,
   relativePath: string,
@@ -591,14 +648,17 @@ function validateRuntimeFoundationUsage(
     const eventDecorator = decoratorsOf(declaration).map((decorator) => {
       const call = decoratorCall(decorator);
       return expressionName(call?.expression ?? decorator.expression);
-    }).find((name) => name === "syncEventHandler" || name === "asyncEventHandler");
+    }).find((name) => name === "syncEventHandler" || name === "vetoEventHandler");
     if (eventDecorator) validateEventHandler(declaration, methods.get("Handle"), eventDecorator);
+    validateEventHandlerOptions(declaration, eventDecorator);
 
     for (const member of declaration.members) {
-      if (ts.isMethodDeclaration(member) && member.body) visit(member.body);
+      if (ts.isMethodDeclaration(member) && member.body) {
+        visit(member.body, propertyName(member.name) ?? member.name.getText(sourceFile));
+      }
     }
 
-    function visit(node: ts.Node): void {
+    function visit(node: ts.Node, ownerMethod: string): void {
       if (ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression)) {
         const callName = node.expression.name.text;
         if (callName === "NewOnceTimer" || callName === "NewRepeatedTimer") {
@@ -610,16 +670,26 @@ function validateRuntimeFoundationUsage(
             "RemoveTimer仅保留兼容语义；新业务请使用CancelTimer(timerId, reason)，明确正常结束与主动中断。",
             "warning",
           );
-        } else if (callName === "PublishAsync" && !isAwaitedOrReturned(node)) {
+        } else if (callName === "PublishAsync") {
           report(
             node.expression.name,
-            "tiangz.event.unawaited-async",
-            "异步Scene Event必须await或直接return，避免发布方在监听器完成前继续执行。",
+            "tiangz.event.async-removed",
+            "TiangZ已移除异步Scene Event；事后通知使用Publish，操作前检查使用Check，后台短任务使用scene.Tasks.Spawn。",
+            "error",
+          );
+        } else if (
+          callName === "Spawn" &&
+          /^(?:Update|Update10Hz|Update5Hz|Update1Hz|LateUpdate|FrameFlush)$/.test(ownerMethod)
+        ) {
+          report(
+            node.expression.name,
+            "tiangz.task.spawn-in-update",
+            `${ownerMethod}中禁止Spawn；每帧启动后台任务会形成无界在途，请改用Timer、Mailbox或有界批处理。`,
             "error",
           );
         }
       }
-      ts.forEachChild(node, visit);
+      ts.forEachChild(node, (child) => visit(child, ownerMethod));
     }
   }
 
@@ -678,19 +748,58 @@ function validateRuntimeFoundationUsage(
     }
     const asyncModifier = ts.getModifiers(handle)?.some((modifier) => modifier.kind === ts.SyntaxKind.AsyncKeyword) ?? false;
     const promiseReturn = handle.type?.getText(sourceFile).replaceAll(" ", "").startsWith("Promise<") ?? false;
-    if (decoratorName === "syncEventHandler" && (asyncModifier || promiseReturn)) {
+    if (asyncModifier || promiseReturn) {
       report(
         handle.name,
         "tiangz.event.sync-handler-async",
-        "同步Scene Event Handler必须返回void，不能声明为async或Promise。",
+        "Scene Event Handler必须同步完成，不能声明为async或Promise。",
         "error",
       );
     }
-    if (decoratorName === "asyncEventHandler" && !asyncModifier && !promiseReturn) {
+    if (
+      decoratorName === "vetoEventHandler" &&
+      handle.type &&
+      !/^(?:number|[A-Za-z_$][\w$]*(?:Error|ErrCode|Reason)[\w$]*)$/.test(
+        handle.type.getText(sourceFile).replaceAll(" ", ""),
+      )
+    ) {
       report(
         handle.name,
-        "tiangz.event.async-handler-sync",
-        "异步Scene Event Handler必须声明async或显式返回Promise<void>。",
+        "tiangz.event.veto-return",
+        "Veto Event Handler必须返回数字错误码；0放行，非0否决。",
+        "error",
+      );
+    }
+  }
+
+  function validateEventHandlerOptions(
+    declaration: ts.ClassDeclaration,
+    decoratorName: string | undefined,
+  ): void {
+    if (!decoratorName) return;
+    const decorator = decoratorsOf(declaration).find((candidate) => {
+      const call = decoratorCall(candidate);
+      return expressionName(call?.expression ?? candidate.expression) === decoratorName;
+    });
+    const call = decorator ? decoratorCall(decorator) : undefined;
+    const options = call?.arguments[2];
+    if (!options || !ts.isObjectLiteralExpression(options)) {
+      report(
+        declaration.name!,
+        "tiangz.event.missing-stable-id",
+        `${decoratorName}必须提供第三个参数{ id: \"稳定监听器ID\" }，用于Hotfix原地替换。`,
+        "error",
+      );
+      return;
+    }
+    const id = options.properties.find((property): property is ts.PropertyAssignment =>
+      ts.isPropertyAssignment(property) && propertyName(property.name) === "id"
+    );
+    if (!id || !stringLiteral(id.initializer)?.trim()) {
+      report(
+        options,
+        "tiangz.event.missing-stable-id",
+        `${decoratorName}的id必须是非空字符串字面量，并跨Hotfix generation保持稳定。`,
         "error",
       );
     }
@@ -727,16 +836,6 @@ function validateRuntimeFoundationUsage(
       location: sourceLocation(sourceFile, node.getStart(sourceFile), relativePath),
     });
   }
-}
-
-/** PublishAsync只有被await或作为当前函数结果返回时才有完成语义。 / PublishAsync has completion semantics only when awaited or returned. */
-function isAwaitedOrReturned(call: ts.CallExpression): boolean {
-  let parent: ts.Node = call.parent;
-  while (ts.isParenthesizedExpression(parent)) parent = parent.parent;
-  return ts.isAwaitExpression(parent)
-    || ts.isReturnStatement(parent)
-    || ts.isVariableDeclaration(parent)
-    || (ts.isArrowFunction(parent) && parent.body === call);
 }
 
 /** 判断类是否为Component状态或其System行为类。 / Determines whether a class is a Component state or System behavior class. */
@@ -1263,7 +1362,7 @@ function projectHandlerSignature(
       if (name === "SceneMessageHandler" || name === "UnitMessageHandler" || name === "ActorMessageHandler") {
         return compactSignature({ messageType: args[1] });
       }
-      if (name === "SyncSceneEventHandler" || name === "AsyncSceneEventHandler") {
+      if (name === "SyncSceneEventHandler" || name === "VetoSceneEventHandler") {
         return compactSignature({ messageType: args[1] });
       }
     }
@@ -1293,7 +1392,7 @@ function validateHandlers(
   const handlersByProtocol = new Map<string, HandlerModel[]>();
   const bindingKeys = new Map<string, HandlerModel>();
   for (const handler of handlers) {
-    if (handler.kind === "actorMethod" || handler.kind === "syncEvent" || handler.kind === "asyncEvent") continue;
+    if (handler.kind === "actorMethod" || handler.kind === "syncEvent" || handler.kind === "vetoEvent") continue;
     const symbol = normalizeDescriptorReference(handler.descriptor);
     const protocol = protocolBySymbol.get(symbol);
     if (!protocol) continue;
