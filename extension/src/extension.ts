@@ -95,7 +95,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.workspace.createFileSystemWatcher("**/proto/**/*.proto"),
     vscode.workspace.createFileSystemWatcher("**/native_data/**/*.native"),
     vscode.workspace.createFileSystemWatcher("**/tools/codegen_*.mjs"),
-    vscode.workspace.createFileSystemWatcher("**/cocos_client2D/assets/scripts/**/*.ts"),
+    vscode.workspace.createFileSystemWatcher("**/client_demo/cocos_client2D/assets/scripts/**/*.ts"),
     vscode.workspace.createFileSystemWatcher("**/src/generated/**/*.{rs,js}"),
   ];
   const serverModule = context.asAbsolutePath(path.join("dist", "server.cjs"));
