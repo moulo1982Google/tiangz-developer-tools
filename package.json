@@ -6,7 +6,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://gitee.com/eblard_admin/tiangz-developer-tools.git"
+    "url": "https://github.com/moulo1982Google/tiangz-developer-tools.git"
   },
   "type": "module",
   "main": "./packages/project-core/dist/index.js",
