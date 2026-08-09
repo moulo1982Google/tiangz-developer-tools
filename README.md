@@ -18,7 +18,7 @@ TiangZ 框架的工程模型、静态检查与 VS Code 开发工具。
 - 根据 `codegen.manifest.json` 检测生成文件过期、缺失、遗留或被手工修改。
 - 识别 `@systemFor` 与 `*System.ts`，跟踪 TiangZ 自动生成的 Model 方法声明。
 - 校验`@lifecycle`与`@transferable()`声明，缺少System、同步生命周期方法或迁移方法时在编辑器和CI中报错。
-- 为 Process JSON 提供 Schema 补全，包括MapHost静态/动态承载角色和`process.persistence.dbProxy`；认证令牌只填写环境变量名，不写入JSON。
+- 为 Process JSON 提供 Schema 补全，包括MapHost静态/动态承载角色、`process.persistence.dbProxy`和`process.observability.nativeData`；旧根级`process.nativeData`会被拒绝。
 - 按 StartMachine 实际部署集合检查 `process.identity` 缺失、范围和重复槽位。
 - 检查 Timer 方法名回调、取消回调签名、同步/Veto Scene Event契约，以及运行时 ID 被误写入持久化结构。
 - 检查`Unit + @actor`和`ActorUnit`遗漏`@actor`，确保普通地图实体与可路由mailbox能力显式分离。

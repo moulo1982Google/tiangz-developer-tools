@@ -95,7 +95,56 @@
             }
           },
           "additionalProperties": false
-        }
+        },
+        "observability": {
+          "type": "object",
+          "properties": {
+            "latency": {
+              "type": "object",
+              "properties": {
+                "enabled": { "type": "boolean", "default": false },
+                "sampleRate": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "default": 1,
+                  "description": "延迟指标采样率；必须大于0。"
+                }
+              },
+              "additionalProperties": false
+            },
+            "health": {
+              "type": "object",
+              "required": ["port"],
+              "properties": {
+                "ip": { "type": "string", "default": "127.0.0.1" },
+                "port": { "type": "integer", "minimum": 1, "maximum": 65535 },
+                "staleAfterMs": { "type": "integer", "minimum": 10000, "default": 15000 }
+              },
+              "additionalProperties": false
+            },
+            "nativeData": {
+              "type": "object",
+              "properties": {
+                "debugScalarAccess": {
+                  "type": "boolean",
+                  "default": false,
+                  "description": "达到阈值时记录Native标量Get/Set访问告警，不会限制业务调用。"
+                },
+                "scalarAccessWarnThreshold": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 4294967295,
+                  "default": 10000,
+                  "description": "单个采样窗口内触发标量访问告警的次数阈值。"
+                }
+              },
+              "additionalProperties": false,
+              "description": "由Rust Core校验的Native Store诊断配置。"
+            }
+          },
+          "additionalProperties": false
+        },
+        "nativeData": false
       },
       "additionalProperties": true
     },

@@ -2,6 +2,8 @@
 
 ## 未发布
 
+- Process JSON补全增加Rust正式配置`process.observability.nativeData`及阈值约束，并明确拒绝旧根级`process.nativeData`。
+
 ## 0.15.1
 
 - 跟随TiangZ Unit/Actor能力拆分，增加普通`Unit`误声明`@actor`和`ActorUnit`遗漏`@actor`的错误诊断，并补充相关中文Hover。
