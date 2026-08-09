@@ -41,6 +41,60 @@
             "allowRemote": { "type": "boolean" }
           },
           "additionalProperties": true
+        },
+        "persistence": {
+          "type": "object",
+          "properties": {
+            "dbProxy": {
+              "type": "object",
+              "required": ["endpoint"],
+              "properties": {
+                "endpoint": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 512,
+                  "description": "DBProxy内网监听地址，例如127.0.0.1:7800。"
+                },
+                "authTokenEnv": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 128,
+                  "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+                  "default": "TIANGZ_DBPROXY_AUTH_TOKEN",
+                  "description": "保存认证令牌的环境变量名；禁止在JSON中填写真实令牌。"
+                },
+                "clientPoolSize": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 64,
+                  "default": 4,
+                  "description": "当前Process到DBProxy的Rust连接池大小。"
+                },
+                "connectTimeoutMs": {
+                  "type": "integer",
+                  "minimum": 100,
+                  "maximum": 120000,
+                  "default": 5000
+                },
+                "requestTimeoutMs": {
+                  "type": "integer",
+                  "minimum": 100,
+                  "maximum": 120000,
+                  "default": 5000
+                },
+                "maxFrameBytes": {
+                  "type": "integer",
+                  "minimum": 1024,
+                  "maximum": 67108864,
+                  "default": 8388608,
+                  "description": "单个DBProxy协议帧上限，必须与服务端一致。"
+                }
+              },
+              "additionalProperties": false,
+              "description": "启用独立DBProxy持久化；省略时由业务选择非DBProxy Repository。"
+            }
+          },
+          "additionalProperties": false
         }
       },
       "additionalProperties": true
