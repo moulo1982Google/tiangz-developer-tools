@@ -72,7 +72,7 @@ export class LoginHandler implements SessionRpcHandler<LoginScene, LoginSession,
     assert.match(hover.contents.value, /C2S_Login.*10001/);
     assert.match(hover.contents.value, /LoginHandler/);
 
-    const foundationUri = `${rootUri}/app/hotfix/demo/RuntimeFoundation.ts`;
+    const foundationUri = `${rootUri}/app/hotfix/mmorpg/RuntimeFoundation.ts`;
     const foundationDiagnostics = rpc.waitForNotification(
       "textDocument/publishDiagnostics",
       (params) => params.uri === foundationUri,
@@ -85,6 +85,26 @@ export class LoginHandler implements SessionRpcHandler<LoginScene, LoginSession,
     });
     assert.match(foundationHover.contents.value, /定时器句柄/);
     assert.match(foundationHover.contents.value, /CancelTimer/);
+
+    const stateUri = `${rootUri}/app/hotfix/mmorpg/StatefulSystem.ts`;
+    const stateDiagnostics = rpc.waitForNotification(
+      "textDocument/publishDiagnostics",
+      (params) => params.uri === stateUri
+        && params.diagnostics.some((diagnostic) => diagnostic.code === "tiangz.hotfix.instance-state"),
+    );
+    open(rpc, stateUri, `import { systemFor as bindSystem, Component } from "#tiangz/model";
+@bindSystem(Component)
+export class StatefulSystem extends Component {
+  private cache = new Map<string, number>();
+  constructor() {}
+}`, 1);
+    const stateDiagnosticCodes = (await stateDiagnostics).diagnostics
+      .filter((diagnostic) => diagnostic.code === "tiangz.hotfix.instance-state")
+      .map((diagnostic) => diagnostic.code);
+    assert.deepEqual(stateDiagnosticCodes, [
+      "tiangz.hotfix.instance-state",
+      "tiangz.hotfix.instance-state",
+    ]);
 
     const references = await rpc.request("textDocument/references", {
       textDocument: { uri: rpcsUri },

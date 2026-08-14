@@ -2,6 +2,8 @@
 
 ## 未发布
 
+- 新增 `tiangz.hotfix.instance-state` 编辑器诊断：禁止 `@systemFor`、`@hotfixFor`、网络 Handler 和 Scene Event Handler 声明字段、构造函数或静态执行状态。
+- 诊断支持 TiangZ Model 装饰器的直接导入、别名导入和命名空间导入，并复用 Language Server 的 Problems 发布链路。
 - Process JSON补全增加Rust正式配置`process.observability.nativeData`及阈值约束，并明确拒绝旧根级`process.nativeData`。
 
 ## 0.15.1

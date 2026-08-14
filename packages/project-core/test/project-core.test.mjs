@@ -158,7 +158,7 @@ test("expands shared known Scene catalogs for every Process", () => {
       }),
     },
     {
-      relativePath: "app/model/demo/scenes/MapHostScene.ts",
+      relativePath: "app/model/mmorpg/scenes/MapHostScene.ts",
       text: `@entryScene() export class MapHostScene {}`,
     },
   ]);
@@ -641,7 +641,7 @@ import "./hotfix/main";`,
 test("requires Hotfix to enter stable code through the model package", () => {
   const snapshot = analyzeTiangZProject([
     {
-      relativePath: "app/hotfix/demo/LoginHandler.ts",
+      relativePath: "app/hotfix/mmorpg/LoginHandler.ts",
       text: `import { Entity } from "../../core/runtime";
 import { LoginScene } from "../../model/demo/LoginScene";
 import { something } from "some-package";`,
@@ -699,6 +699,34 @@ export class PlayerUnit extends Unit {
   assert.equal(warnings.length, 6);
   assert.ok(warnings.every((diagnostic) => diagnostic.severity === "error"));
   assert.deepEqual(warnings.map((diagnostic) => diagnostic.location.line), [2, 3, 4, 5, 10, 11]);
+});
+
+test("rejects state and constructors in Hotfix behavior classes", () => {
+  const snapshot = analyzeTiangZProject([
+    {
+      relativePath: "app/hotfix/game/BadSystem.ts",
+      text: `import { systemFor as bindSystem, Component } from "#tiangz/model";
+@bindSystem(Component)
+export class BadSystem extends Component {
+  private cache = new Map<string, number>();
+  constructor() {}
+}`,
+    },
+    {
+      relativePath: "app/hotfix/game/NamespaceSystem.ts",
+      text: `import * as model from "#tiangz/model";
+@model.systemFor(model.Component)
+export class NamespaceSystem extends model.Component {
+  protected pending = 0;
+}`,
+    },
+  ]);
+  const diagnostics = snapshot.diagnostics.filter(
+    (diagnostic) => diagnostic.code === "tiangz.hotfix.instance-state",
+  );
+  assert.equal(diagnostics.length, 3);
+  assert.ok(diagnostics.every((diagnostic) => diagnostic.severity === "error"));
+  assert.deepEqual(diagnostics.map((diagnostic) => diagnostic.location.line), [3, 4, 3]);
 });
 
 test("does not warn for nullable fields, discriminated unions, dictionaries or ordinary DTOs", () => {
@@ -979,15 +1007,15 @@ test("marks scene imports stale only when the selected file set changes", () => 
 
 test("tracks Hotfix patches, Systems, and benchmark handlers as generated selections", () => {
   const files = [
-    { relativePath: "app/hotfix/demo/LoginHotfix.ts", text: "export class LoginHotfix {}" },
-    { relativePath: "app/hotfix/demo/PlayerUnitSystem.ts", text: "export class PlayerUnitSystem {}" },
+    { relativePath: "app/hotfix/mmorpg/LoginHotfix.ts", text: "export class LoginHotfix {}" },
+    { relativePath: "app/hotfix/mmorpg/PlayerUnitSystem.ts", text: "export class PlayerUnitSystem {}" },
     { relativePath: "app/hotfix/bench/handlers/PingHandler.ts", text: "export class PingHandler {}" },
-    { relativePath: "app/model/demo/PlayerUnit.ts", text: "export class PlayerUnit {}" },
+    { relativePath: "app/model/mmorpg/PlayerUnit.ts", text: "export class PlayerUnit {}" },
   ];
   const manifest = generatedManifest({
     selections: [
-      { kind: "hotfix-patch", roots: ["app/hotfix/demo"], paths: [files[0].relativePath] },
-      { kind: "hotfix-system", roots: ["app/hotfix/demo"], paths: [files[1].relativePath] },
+      { kind: "hotfix-patch", roots: ["app/hotfix/mmorpg"], paths: [files[0].relativePath] },
+      { kind: "hotfix-system", roots: ["app/hotfix/mmorpg"], paths: [files[1].relativePath] },
       { kind: "bench-handler", roots: ["app/hotfix/bench"], paths: [files[2].relativePath] },
       { kind: "system-model", roots: ["app/model"], paths: [files[3].relativePath] },
     ],

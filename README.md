@@ -34,6 +34,7 @@ TiangZ 框架的工程模型、静态检查与 VS Code 开发工具。
 - 原配置没有 `process.debug` 时，在 VS Code 工作区存储中生成并清理临时调试配置。
 - 从 StartMachine 启动主工程统一的源码开发模式，保存 Hotfix 后自动构建不可变候选并 Reload。
 - 对运行时状态类中显式 `any`、跨基本存储种类联合字段、`delete` 字段和 `as any` 属性写入提供黄色性能建议。
+- 对 `@systemFor`、`@hotfixFor` 和网络/Event Handler 类中的字段、构造函数、静态块与静态方法提供编辑器错误诊断；行为类不保存状态，状态必须回到 Model 的 Entity/Component。
 - 对 Component 公开可变 `Map/Set`、生产 Handler 直接导入 `Native*Ref` 提供黄色所有权建议，引导业务通过 Component 领域方法修改子对象。
 - 提供确定性的领域设计规则库，覆盖 Item、Buff、Quest、Achievement、Numeric 及自定义系统。
 - 提供“TiangZ：设计业务系统”向导和 `@tiangz /design` 聊天入口；AI 只解释规则，不改变确定性结论。
@@ -101,6 +102,8 @@ node dist/tiangz-design.cjs --input .\DesignRequest.json
 `tiangz.architecture.component-public-collection`与`tiangz.architecture.native-ref-in-handler`同样是低噪音黄色建议。前者防止业务绕过 Component 的集合所有权，后者防止 Handler 泄漏可变 Native 句柄；所属 System 和 Bench 仍可按需要直接使用底层能力。
 
 `tiangz.timer.*`、`tiangz.event.*`与`tiangz.persistence.runtime-id`只检查能从单文件语法树确定的问题。插件不会创建第二套工程级 TypeScript 类型检查器，也不会阻止合法的动态业务代码。
+
+`tiangz.hotfix.instance-state`是错误级诊断。它覆盖直接导入、导入别名和命名空间导入，例如 `import { systemFor as bindSystem } ...` 与 `@model.systemFor(...)`；把缓存、TimerId 或其他长期状态写入行为类会在 VS Code Problems 中直接标红。请把状态放到对应的 Model Component/Entity，Handler 只保留参数校验和调用链编排。
 
 ## 领域设计助手
 
