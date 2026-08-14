@@ -2,6 +2,13 @@
 
 ## 未发布
 
+- 增加 `tiangz-new-component` 组件脚手架：一次生成可复用 Model、领域门面和 Hotfix System，并自动追加 `app/model/public.ts` 导出。
+- 组件脚手架默认拒绝覆盖已有文件，校验工程根目录和保留领域名，并支持 `--dry-run` 预览。
+- VS Code 增加“TiangZ：新建 Component”命令，与 CLI 复用同一套模板、工程校验和冲突保护。
+- VS Code 增加“TiangZ：运行快速工程检查”命令，复用主工程 `verify:fast` 并通过独立 Task 展示结果。
+- VS Code 增加“TiangZ：查看运行时指标”命令，复用主工程只读 `/metrics`，展示 Process、Scene mailbox、pending RPC、Timer 和 Native Entity 摘要。
+- Process 工程模型索引 `process.observability.health`，并将 `0.0.0.0`/`::` 监听地址安全转换为本机回环访问。
+- 新增 Runtime Inspector 协议草案，冻结只读、版本化、认证、超时、限流和响应大小边界；当前仍不宣称实体查询已经接入 Runtime。
 - 新增 `tiangz.hotfix.instance-state` 编辑器诊断：禁止 `@systemFor`、`@hotfixFor`、网络 Handler 和 Scene Event Handler 声明字段、构造函数或静态执行状态。
 - 诊断支持 TiangZ Model 装饰器的直接导入、别名导入和命名空间导入，并复用 Language Server 的 Problems 发布链路。
 - Process JSON补全增加Rust正式配置`process.observability.nativeData`及阈值约束，并明确拒绝旧根级`process.nativeData`。

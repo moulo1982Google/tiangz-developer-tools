@@ -1,6 +1,6 @@
 {
   "name": "@tiangz/developer-tools-core",
-  "version": "0.15.1",
+  "version": "0.15.2",
   "description": "TiangZ 工程模型、静态索引与 VS Code 开发工具",
   "author": "moulo",
   "license": "Apache-2.0",
@@ -13,6 +13,7 @@
   "types": "./packages/project-core/dist/index.d.ts",
   "bin": {
     "tiangz-check-project": "./dist/tiangz-check-project.cjs",
+    "tiangz-new-component": "./dist/tiangz-new-component.cjs",
     "tiangz-design": "./dist/tiangz-design.cjs",
     "tiangz-design-mcp": "./dist/tiangz-design-mcp.cjs"
   },
@@ -31,6 +32,8 @@
     "packages/design-core/dist/**",
     "dist/tiangz-check-project.cjs",
     "dist/tiangz-check-project.cjs.map",
+    "dist/tiangz-new-component.cjs",
+    "dist/tiangz-new-component.cjs.map",
     "dist/tiangz-design.cjs",
     "dist/tiangz-design.cjs.map",
     "dist/tiangz-design-mcp.cjs",
@@ -49,6 +52,7 @@
     "typecheck:design-cli": "tsc -p packages/design-cli/tsconfig.json",
     "typecheck:design-mcp": "tsc -p packages/design-mcp/tsconfig.json",
     "build:cli": "node tools/build-cli.mjs",
+    "new:component": "npm run build:cli && node dist/tiangz-new-component.cjs",
     "build:design-cli": "node tools/build-design-cli.mjs",
     "build:design-mcp": "node tools/build-design-mcp.mjs",
     "build:extension": "npm run typecheck --workspace tiangz-developer-tools && npm run build --workspace tiangz-developer-tools",

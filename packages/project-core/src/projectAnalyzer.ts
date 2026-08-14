@@ -152,6 +152,7 @@ function analyzeConfig(
   }
   if (!isRecord(value.process) || typeof value.process.name !== "string") return;
   const debug = processDebugConfig(value.process.debug);
+  const observability = processObservabilityConfig(value.process.observability);
   const identity = processIdentityConfig(value.process.identity);
   processes.push({
     environment,
@@ -159,6 +160,7 @@ function analyzeConfig(
     relativePath: source.relativePath,
     ...(identity ? { identity } : {}),
     ...(debug ? { debug } : {}),
+    ...(observability ? { observability } : {}),
     scenes: sceneConfigs(value.scenes),
     knownSceneFiles: stringArray(value.knownSceneFiles),
     knownScenes: sceneConfigs(value.knownScenes),
@@ -311,6 +313,16 @@ function processDebugConfig(value: unknown) {
     inspectorPort: value.inspectorPort,
     breakOnStart: value.breakOnStart === true,
     allowRemote: value.allowRemote === true,
+  };
+}
+
+function processObservabilityConfig(value: unknown) {
+  if (!isRecord(value) || !isRecord(value.health) || typeof value.health.port !== "number") return undefined;
+  return {
+    health: {
+      ip: typeof value.health.ip === "string" ? value.health.ip : "127.0.0.1",
+      port: value.health.port,
+    },
   };
 }
 

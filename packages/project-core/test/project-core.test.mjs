@@ -224,6 +224,22 @@ test("indexes Process Inspector configuration", () => {
   });
 });
 
+test("indexes Process health metrics configuration", () => {
+  const snapshot = analyzeTiangZProject([{
+    relativePath: "configs/local/metrics.json",
+    text: JSON.stringify({
+      process: {
+        name: "metrics",
+        observability: { health: { ip: "0.0.0.0", port: 7600 } },
+      },
+    }),
+  }]);
+  assert.deepEqual(snapshot.processes[0].observability, {
+    health: { ip: "0.0.0.0", port: 7600 },
+  });
+  assert.deepEqual(snapshot.diagnostics, []);
+});
+
 test("creates an isolated debug config without changing business fields", () => {
   const generated = createDebugConfig(JSON.stringify({
     process: { name: "map1", game: { fixedUpdateMs: 50 } },

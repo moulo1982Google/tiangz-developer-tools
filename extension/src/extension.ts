@@ -15,6 +15,7 @@ import type {
   TiangZProjectSnapshot,
 } from "../../packages/project-core/src/types.js";
 import { CodegenTaskManager, generatorLabel } from "./codegenTaskManager.js";
+import { createComponentFromWorkspace } from "./componentScaffold.js";
 import { attachDebugger, prepareDebugLaunch } from "./debugSession.js";
 import { DevSourceManager } from "./devSourceManager.js";
 import { registerDesignAssistant } from "./designAssistant.js";
@@ -25,6 +26,7 @@ import {
 } from "./projectIndex.js";
 import { ProjectTreeProvider, type ProjectNode } from "./projectTree.js";
 import { TiangZProcessManager } from "./processManager.js";
+import { openRuntimeMetrics } from "./runtimeInspector.js";
 
 const INDEX_FILES_NOTIFICATION = "tiangzProject/indexFiles";
 const SNAPSHOT_NOTIFICATION = "tiangzProject/snapshot";
@@ -162,6 +164,15 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.commands.registerCommand("tiangzDeveloperTools.openUriLocation", openUriLocation),
     vscode.commands.registerCommand("tiangzDeveloperTools.showProjectSummary", () => showSummary(projects)),
     vscode.commands.registerCommand("tiangzDeveloperTools.showServerStats", showServerStats),
+    vscode.commands.registerCommand("tiangzDeveloperTools.newComponent", (node?: ProjectNode) => runCommand(
+      () => createComponentFromWorkspace(node, refresh),
+    )),
+    vscode.commands.registerCommand("tiangzDeveloperTools.verifyFast", () => runCommand(
+      () => verifyFast(projects, codegenTaskManager),
+    )),
+    vscode.commands.registerCommand("tiangzDeveloperTools.showRuntimeMetrics", (node?: ProjectNode | vscode.Uri) => runCommand(
+      () => showRuntimeMetrics(node, projects),
+    )),
     vscode.commands.registerCommand("tiangzDeveloperTools.testRuntimeFoundation", () => runCommand(
       () => testRuntimeFoundation(projects, codegenTaskManager),
     )),
@@ -261,16 +272,7 @@ async function testRuntimeFoundation(
   manager: CodegenTaskManager,
 ): Promise<void> {
   ensureTrustedWorkspace();
-  let project: IndexedProject | undefined;
-  if (projects.length === 1) {
-    project = projects[0];
-  } else {
-    const picked = await vscode.window.showQuickPick(
-      projects.map((candidate) => ({ label: candidate.folder.name, project: candidate })),
-      { placeHolder: "选择要运行 Runtime Foundation 自测的 TiangZ 工程" },
-    );
-    project = picked?.project;
-  }
+  const project = await selectProject(projects, "选择要运行 Runtime Foundation 自测的 TiangZ 工程");
   if (!project) return;
   const exitCode = await manager.run(project.folder, {
     id: "runtime-foundation",
@@ -278,6 +280,45 @@ async function testRuntimeFoundation(
   });
   if (exitCode !== 0) throw new Error(`Runtime Foundation 自测失败，退出码 ${exitCode}；请查看任务终端`);
   void vscode.window.showInformationMessage("TiangZ：Runtime Foundation 自测通过");
+}
+
+/** 运行主工程的秒级日常门禁；只检查代码和边界，不启动服务器或执行压力测试。 / Runs the project's fast daily gate without starting servers or pressure tests. */
+async function verifyFast(
+  projects: readonly IndexedProject[],
+  manager: CodegenTaskManager,
+): Promise<void> {
+  ensureTrustedWorkspace();
+  const project = await selectProject(projects, "选择要运行快速检查的 TiangZ 工程");
+  if (!project) return;
+  const exitCode = await manager.run(project.folder, {
+    id: "verify-fast",
+    command: "npm run verify:fast",
+  });
+  if (exitCode !== 0) throw new Error(`快速工程检查失败，退出码 ${exitCode}；请查看任务终端`);
+  void vscode.window.showInformationMessage("TiangZ：快速工程检查通过");
+}
+
+/** 打开主工程已有的只读 /metrics 摘要，不新增调试 RPC。 / Opens the existing read-only /metrics summary without adding a debug RPC. */
+async function showRuntimeMetrics(
+  target: ProjectNode | vscode.Uri | undefined,
+  projects: readonly IndexedProject[],
+): Promise<void> {
+  ensureTrustedWorkspace();
+  const selected = await selectProcess(target, projects);
+  if (!selected) return;
+  await openRuntimeMetrics(vscode, selected.process);
+}
+
+async function selectProject(
+  projects: readonly IndexedProject[],
+  placeHolder: string,
+): Promise<IndexedProject | undefined> {
+  if (projects.length === 1) return projects[0];
+  const picked = await vscode.window.showQuickPick(
+    projects.map((candidate) => ({ label: candidate.folder.name, project: candidate })),
+    { placeHolder },
+  );
+  return picked?.project;
 }
 
 async function selectGenerator(

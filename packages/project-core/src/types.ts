@@ -64,6 +64,7 @@ export interface ProcessConfigModel {
   readonly relativePath: string;
   readonly identity?: ProcessIdentityConfigModel;
   readonly debug?: ProcessDebugConfigModel;
+  readonly observability?: ProcessObservabilityConfigModel;
   readonly scenes: readonly SceneConfigModel[];
   readonly knownSceneFiles: readonly string[];
   readonly knownScenes: readonly SceneConfigModel[];
@@ -79,6 +80,15 @@ export interface ProcessDebugConfigModel {
   readonly inspectorPort: number;
   readonly breakOnStart: boolean;
   readonly allowRemote: boolean;
+}
+
+export interface ProcessObservabilityConfigModel {
+  readonly health?: ProcessHealthConfigModel;
+}
+
+export interface ProcessHealthConfigModel {
+  readonly ip: string;
+  readonly port: number;
 }
 
 export interface MachineConfigModel {

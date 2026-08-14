@@ -25,6 +25,9 @@ TiangZ 框架的工程模型、静态检查与 VS Code 开发工具。
 - 识别同步通知/Veto Event Handler，并为 GlobalId、InstanceId、Timer、协程锁、Veto Event和`scene.Tasks.Spawn`提供中文 Hover。
 - 为`Unit`、`ActorUnit`和`UnitComponent`提供中文Hover，说明普通怪物与玩家Actor的创建边界。
 - 提供与 VS Code Problems 使用相同规则的 `tiangz-check-project` 命令，可直接接入 CI。
+- 提供 `tiangz-new-component` 组件脚手架，一次生成通用 Model、领域门面和 Hotfix System，并拒绝覆盖已有业务文件。
+- 在“TiangZ 工程”树和命令面板提供“TiangZ：新建 Component”，与 CLI 使用同一套生成和冲突校验逻辑。
+- 在“TiangZ 工程”树和命令面板提供“TiangZ：运行快速工程检查”，调用主工程的 `npm run verify:fast`，不启动服务器、不做压力测试。
 - 从工程树、命令面板或 Proto/Native 文件右键菜单定向运行 Manifest 中的生成器。
 - 独立 Language Server 使用 150ms 防抖，不保留 TypeScript AST，并提供运行状态指标。
 - 从工程树、原生资源管理器或命令面板运行、调试、停止和重启单个 Process。
@@ -40,6 +43,7 @@ TiangZ 框架的工程模型、静态检查与 VS Code 开发工具。
 - 提供“TiangZ：设计业务系统”向导和 `@tiangz /design` 聊天入口；AI 只解释规则，不改变确定性结论。
 - 提供 `tiangz-design` CLI 和只读 `tiangz-design-mcp`，让终端、CI 与其他 AI 使用同一套规则。
 - 提供“TiangZ：运行 Runtime Foundation 自测”命令，复用主工程 `npm run test:runtime-foundation`。
+- 提供“TiangZ：查看运行时指标”命令，读取主工程已有的 `/metrics`，展示 CPU、RSS、Rust/Scene mailbox、在途 RPC、Timer 与 Native 实体摘要；这是只读观测，不新增业务 RPC。
 
 ## 本地开发
 
@@ -49,7 +53,7 @@ npm run check
 npm run package:extension
 ```
 
-生成的 VSIX 位于 `dist/tiangz-developer-tools-0.15.1.vsix`。
+生成的 VSIX 位于 `dist/tiangz-developer-tools-0.15.2.vsix`。
 GitHub Actions 会在 Windows、Ubuntu 上执行同一套 `npm run check`，并提供可下载的 VSIX artifact。
 
 检查任意 TiangZ 工程：
@@ -58,6 +62,30 @@ GitHub Actions 会在 Windows、Ubuntu 上执行同一套 `npm run check`，并�
 npm run check:project -- E:\gitee\TiangZ
 node dist/tiangz-check-project.cjs E:\gitee\TiangZ --format json
 ```
+
+生成一个业务 Component：
+
+```powershell
+npm run new:component -- Inventory --domain mmorpg --project E:\gitee\TiangZ
+```
+
+脚手架会生成 `app/model/domains` 下的通用 Component、`app/model/mmorpg` 下的领域门面和 `app/hotfix/mmorpg` 下的 System，并更新 `app/model/public.ts`。先用 `--dry-run` 预览；生成后在 TiangZ 工程中执行 `npm run codegen:scenes && npm run typecheck && npm run verify:fast`。
+
+在 VS Code 中也可以从“TiangZ 工程”树根节点或命令面板执行“TiangZ：新建 Component”；它会询问组件名和领域，并在生成后刷新工程索引。
+
+在 Process 节点上执行“TiangZ：查看运行时指标”，插件会读取该配置的 `process.observability.health`：
+
+```json
+{
+  "process": {
+    "observability": {
+      "health": { "ip": "127.0.0.1", "port": 7600 }
+    }
+  }
+}
+```
+
+插件只访问 `GET /metrics`，并将摘要打开为只读 Markdown 文档。`0.0.0.0` 或 `::` 监听地址会按本机访问转换为回环地址；它不会执行调试 RPC、查询或修改业务实体。按 UnitId 查询、权限、限流和协议版本检查仍属于后续 Runtime Inspector 阶段。
 
 设计一个业务系统：
 
@@ -115,6 +143,8 @@ node dist/tiangz-design.cjs --input .\DesignRequest.json
 
 详细说明见 [运行与调试](docs/run-and-debug.md)。
 
+运行时指标与后续只读 Inspector 的边界见 [Runtime Inspector 协议草案](docs/runtime-inspector-protocol.md)。
+
 目录分层与组合入口规则见[工程依赖规则](docs/dependency-rules.md)。
 
 生成器所有权和诊断说明见[Generated 完整性检查](docs/generated-integrity.md)。
@@ -127,7 +157,7 @@ node dist/tiangz-design.cjs --input .\DesignRequest.json
 
 `packages/project-core` 不依赖 VS Code，只接收相对路径和文件文本。VS Code 扩展负责文件发现和工程树；独立 Language Server 负责 Problems、协议导航、Hover 与 CodeLens。
 
-`packages/project-core` 同时被 Language Server 与 CLI 调用，因此编辑器和 CI 使用同一套工程规则。运行时 Inspector 尚未实现，后续会作为独立阶段推进。
+`packages/project-core` 同时被 Language Server 与 CLI 调用，因此编辑器和 CI 使用同一套工程规则。运行时 Inspector 当前先复用主工程 `/metrics` 做只读观测；它不替代后续需要权限控制的实体查询协议。
 
 详细设计见 [架构设计](docs/architecture.md)，后续顺序见 [路线图](docs/roadmap.md)。
 

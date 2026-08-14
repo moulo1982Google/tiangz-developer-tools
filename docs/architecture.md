@@ -43,6 +43,23 @@ Generated 完整性由根目录 `codegen.manifest.json` 描述。Language Server
 
 代码生成命令同样来自 Manifest。扩展只负责把所选命令放入独立 VS Code Task，不在插件内维护另一份 npm script 映射。详见[定向代码生成](codegen-actions.md)。
 
+## 业务脚手架与快速门禁
+
+`tiangz-new-component` 与 VS Code 的“TiangZ：新建 Component”共用同一个脚手架实现。它只负责生成既有目录约定中的三件套：`app/model/domains/<feature>` 的通用 Component、`app/model/<domain>/<feature>` 的领域门面和 `app/hotfix/<domain>/<feature>` 的 System，并追加 `app/model/public.ts` 导出。它不会生成协议、配置、Scene 或业务字段，也不会覆盖已有文件。
+
+VS Code 的“TiangZ：运行快速工程检查”只调用主工程的 `npm run verify:fast`，通过独立 Task 展示输出；它不启动服务器、不修改代码、不执行压力测试。脚手架完成后仍必须由主工程的 codegen、typecheck 和快速门禁确认生成结果。
+
+## 运行时观测边界
+
+主工程已经提供绑定在 `process.observability.health` 上的 `/metrics` 只读端点。Developer Tools 的“TiangZ：查看运行时指标”只读取这个端点，并把 CPU、RSS、Rust 入口队列、Scene mailbox、异步在途、Timer 和 Native Entity 数量整理成 Markdown：
+
+```text
+Process 配置 -> process.observability.health -> GET /metrics
+                                         `-> VS Code 只读 Markdown 摘要
+```
+
+插件不复制 Runtime 内部状态、不发送业务 RPC，也不通过 V8 Inspector 修改实体。监听地址 `0.0.0.0`/`::` 仅在本机查看时转换为回环地址。按 UnitId 查询、远程访问授权、限流和调试协议版本校验必须等正式 Inspector 协议冻结后再加入，避免把 Prometheus 文本端点误当成管理接口。
+
 ## 性能边界
 
 - 文件读取使用 VS Code 异步文件系统 API。

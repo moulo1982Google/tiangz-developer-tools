@@ -31,6 +31,8 @@
 - [x] 检测 Generated 文件过期、缺失、遗留或被手工修改
 - [x] 提供可在 CI 运行的 `check:project` CLI
 - [x] 为 proto、scene、client handler 和 native 提供定向重新生成操作
+- [x] 提供 `new:component` CLI 和 VS Code Component 脚手架
+- [x] 提供 VS Code `verify:fast` 快速工程检查入口
 
 ## Phase 4：领域设计助手
 
@@ -42,9 +44,11 @@
 
 ## Phase 5：运行时 Inspector
 
-- [ ] 按 UnitId 查询 Process、Scene、Gate 和 ActorLocation
-- [ ] 查看 mailbox 长度、pending RPC 和定时器
-- [ ] 查看 Native handle 对应的 Rust Entity 数据
+- [x] 复用主工程 `/metrics` 查看 Process、Scene mailbox、pending RPC、Timer 和 Native Entity 摘要
+- [x] 冻结只读 Inspector 协议草案、版本号、超时、限流、认证和响应大小边界
+- [ ] 实现只读 Inspector 协议，支持按 UnitId 查询 Process、Scene、Gate 和 ActorLocation
+- [ ] 在正式 Inspector 协议中查看 mailbox 长度、pending RPC 和定时器明细
+- [ ] 在正式 Inspector 协议中查看 Native handle 对应的 Rust Entity 数据
 - [ ] 增加权限、限流和调试协议版本检查
 
 ## Phase 6：统一安装

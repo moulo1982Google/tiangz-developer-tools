@@ -2,7 +2,7 @@
   "name": "tiangz-developer-tools",
   "displayName": "TiangZ Developer Tools",
   "description": "TiangZ Process、Scene、协议导航、运行与 TypeScript 调试工具",
-  "version": "0.15.1",
+  "version": "0.15.2",
   "publisher": "moulo",
   "author": "moulo",
   "license": "Apache-2.0",
@@ -119,6 +119,21 @@
       {
         "command": "tiangzDeveloperTools.showServerStats",
         "title": "TiangZ：显示语言服务器状态"
+      },
+      {
+        "command": "tiangzDeveloperTools.newComponent",
+        "title": "TiangZ：新建 Component",
+        "icon": "$(new-file)"
+      },
+      {
+        "command": "tiangzDeveloperTools.verifyFast",
+        "title": "TiangZ：运行快速工程检查",
+        "icon": "$(check-all)"
+      },
+      {
+        "command": "tiangzDeveloperTools.showRuntimeMetrics",
+        "title": "TiangZ：查看运行时指标",
+        "icon": "$(pulse)"
       },
       {
         "command": "tiangzDeveloperTools.testRuntimeFoundation",
@@ -244,9 +259,34 @@
           "command": "tiangzDeveloperTools.designSystem",
           "when": "view == tiangzProject",
           "group": "navigation@4"
+        },
+        {
+          "command": "tiangzDeveloperTools.newComponent",
+          "when": "view == tiangzProject",
+          "group": "navigation@5"
+        },
+        {
+          "command": "tiangzDeveloperTools.verifyFast",
+          "when": "view == tiangzProject",
+          "group": "navigation@6"
+        },
+        {
+          "command": "tiangzDeveloperTools.showRuntimeMetrics",
+          "when": "view == tiangzProject",
+          "group": "navigation@7"
         }
       ],
       "view/item/context": [
+        {
+          "command": "tiangzDeveloperTools.newComponent",
+          "when": "view == tiangzProject && viewItem == tiangzProject",
+          "group": "tiangzCreate@1"
+        },
+        {
+          "command": "tiangzDeveloperTools.showRuntimeMetrics",
+          "when": "view == tiangzProject && (viewItem == tiangzStoppedProcessConfig || viewItem == tiangzRunningProcessConfig)",
+          "group": "tiangzInspect@1"
+        },
         {
           "command": "tiangzDeveloperTools.openLocation",
           "when": "view == tiangzProject && (viewItem == tiangzLocation || viewItem == tiangzStoppedProcessConfig || viewItem == tiangzRunningProcessConfig || viewItem == tiangzMachineConfig)",

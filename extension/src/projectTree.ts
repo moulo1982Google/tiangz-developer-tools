@@ -97,6 +97,8 @@ function projectNode(
     label: showFolder ? project.folder.name : "TiangZ",
     description: `${snapshot.processes.length} Process / ${snapshot.handlers.length} Handler`,
     icon: "project",
+    contextValue: "tiangzProject",
+    rootUri,
     children: categories,
   };
 }
@@ -203,6 +205,7 @@ function processNode(
       status ? `状态：${status.state}` : "状态：未启动",
       status?.pid ? `PID：${status.pid}` : undefined,
       status?.inspector ? `Inspector：${status.inspector}` : process.debug ? `Inspector：${process.debug.inspectorIp}:${process.debug.inspectorPort}` : undefined,
+      process.observability?.health ? `Metrics：http://${process.observability.health.ip}:${process.observability.health.port}/metrics` : undefined,
     ].filter(Boolean).join("\n"),
     icon: processIcon(status),
     location: { relativePath: process.relativePath, line: 0, character: 0 },

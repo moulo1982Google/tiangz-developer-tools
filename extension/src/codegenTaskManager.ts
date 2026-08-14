@@ -49,6 +49,7 @@ export function generatorLabel(id: string): string {
     case "scenes": return "Scene 与服务端 Handler";
     case "client-handlers": return "客户端 Handler";
     case "runtime-foundation": return "Runtime Foundation 自测";
+    case "verify-fast": return "快速工程检查";
     default: return id;
   }
 }
