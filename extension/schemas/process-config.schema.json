@@ -55,6 +55,16 @@
                   "maxLength": 512,
                   "description": "DBProxy内网监听地址，例如127.0.0.1:7800。"
                 },
+                "failoverEndpoints": {
+                  "type": "array",
+                  "maxItems": 7,
+                  "items": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 512
+                  },
+                  "description": "按顺序尝试的DBProxy备用内网地址；只有网络不可用时切换。"
+                },
                 "authTokenEnv": {
                   "type": "string",
                   "minLength": 1,

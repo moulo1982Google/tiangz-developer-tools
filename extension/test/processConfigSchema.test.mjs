@@ -18,3 +18,14 @@ test("exposes the Rust-owned NativeData observability contract", async () => {
   assert.equal(nativeData.properties.scalarAccessWarnThreshold.minimum, 1);
   assert.equal(nativeData.properties.scalarAccessWarnThreshold.default, 10_000);
 });
+
+test("exposes ordered DBProxy failover endpoints", async () => {
+  const schema = JSON.parse(await readFile(schemaPath, "utf8"));
+  const dbProxy = schema.properties.process.properties.persistence.properties.dbProxy;
+  const failoverEndpoints = dbProxy.properties.failoverEndpoints;
+
+  assert.equal(failoverEndpoints.type, "array");
+  assert.equal(failoverEndpoints.maxItems, 7);
+  assert.equal(failoverEndpoints.items.type, "string");
+  assert.equal(failoverEndpoints.items.maxLength, 512);
+});
