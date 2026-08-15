@@ -47,6 +47,8 @@ TiangZ 框架的工程模型、静态检查与 VS Code 开发工具。
 
 ## 本地开发
 
+当前处于持续开发阶段，`package.json`、`package-lock.json`和插件版本号不作为冻结契约；日常使用`npm install`即可。准备发布Marketplace或正式Tag时，再由维护者统一审查版本、锁文件和兼容性。
+
 ```powershell
 npm install
 npm run check
