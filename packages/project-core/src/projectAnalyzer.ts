@@ -4,6 +4,7 @@ import ts from "typescript";
 
 import { validateTypeScriptDependencies } from "./dependencyRules.js";
 import { validateGeneratedIntegrity } from "./generatedIntegrity.js";
+import { resolveMachineProcessPaths } from "./launch.js";
 import { readProjectGenerators } from "./projectFiles.js";
 
 import type {
@@ -692,12 +693,14 @@ function validateRuntimeFoundationUsage(
           );
         } else if (
           callName === "Spawn" &&
+          ts.isPropertyAccessExpression(node.expression.expression) &&
+          node.expression.expression.name.text === "Tasks" &&
           /^(?:Update|Update10Hz|Update5Hz|Update1Hz|LateUpdate|FrameFlush)$/.test(ownerMethod)
         ) {
           report(
             node.expression.name,
             "tiangz.task.spawn-in-update",
-            `${ownerMethod}中禁止Spawn；每帧启动后台任务会形成无界在途，请改用Timer、Mailbox或有界批处理。`,
+            `${ownerMethod}中禁止Tasks.Spawn；每个更新周期启动后台任务会形成无界在途，请改用Timer、Mailbox或有界批处理。`,
             "error",
           );
         }
@@ -1286,10 +1289,12 @@ function validateProject(
       });
     }
   }
-  const processFiles = new Set(processes.map((process) => `${process.environment}/${path.posix.basename(process.relativePath)}`));
+  const processFiles = new Set(processes.map((process) => normalizePath(process.relativePath)));
   for (const machine of machines) {
-    for (const processFile of machine.processes) {
-      if (processFiles.has(`${machine.environment}/${processFile}`)) continue;
+    const resolvedProcessPaths = resolveMachineProcessPaths(machine);
+    for (let index = 0; index < machine.processes.length; index += 1) {
+      const processFile = machine.processes[index]!;
+      if (processFiles.has(resolvedProcessPaths[index]!)) continue;
       diagnostics.push({
         code: "tiangz.machine.missing-process-config",
         severity: "error",
@@ -1318,9 +1323,7 @@ function validateProcessIdentities(
   for (const [startMachinePath, group] of startMachines) {
     const slots = new Map<string, ProcessConfigModel>();
     for (const machine of group) {
-      const directory = path.posix.dirname(machine.relativePath);
-      for (const processFile of machine.processes) {
-        const processPath = path.posix.normalize(path.posix.join(directory, processFile.replaceAll("\\", "/")));
+      for (const processPath of resolveMachineProcessPaths(machine)) {
         const process = processByPath.get(processPath);
         if (!process) continue;
         if (!process.identity) {

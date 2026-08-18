@@ -267,6 +267,32 @@ test("resolves StartMachine process files relative to its environment", () => {
   }), ["configs/local/login1.json", "configs/local/groups/map1.json"]);
 });
 
+test("resolves and validates StartMachine process files across sibling config directories", () => {
+  const machine = {
+    environment: "local",
+    name: "local-dbproxy",
+    innerIp: "127.0.0.1",
+    processes: ["../cluster/gate-1.json"],
+    relativePath: "configs/local/cluster-dbproxy/StartMachine.json",
+  };
+  assert.deepEqual(resolveMachineProcessPaths(machine), ["configs/local/cluster/gate-1.json"]);
+
+  const snapshot = analyzeTiangZProject([
+    {
+      relativePath: "configs/local/cluster/gate-1.json",
+      text: JSON.stringify({
+        process: { name: "gate-1", identity: { originServerId: 1, workerId: 1 } },
+        scenes: [],
+      }),
+    },
+    {
+      relativePath: machine.relativePath,
+      text: JSON.stringify({ machines: [machine] }),
+    },
+  ]);
+  assert.deepEqual(snapshot.diagnostics, []);
+});
+
 test("validates process identity only for configs referenced by each StartMachine", () => {
   const snapshot = analyzeTiangZProject([
     {
@@ -893,6 +919,8 @@ class RuntimeFoundationSystem {
     this.scene.Tasks.Spawn("warm-cache", async ({ signal }) => this.Warm(signal));
   }
   async Warm(_signal: SceneTaskSignal): Promise<void> {}
+  Update1Hz(): void { this.Spawn(); }
+  private Spawn(): void {}
   Tick(_args: unknown): void {}
   Cancelled(_args: unknown, _context: TimerCancellationContext): void {}
 }
@@ -907,6 +935,7 @@ class BeforeSaveHandler implements VetoSceneEventHandler<GameScene, BeforeSaveEv
   }]);
   assert.deepEqual(snapshot.diagnostics.filter((diagnostic) => diagnostic.code.startsWith("tiangz.timer.")
     || diagnostic.code.startsWith("tiangz.event.")
+    || diagnostic.code === "tiangz.task.spawn-in-update"
     || diagnostic.code === "tiangz.persistence.runtime-id"), []);
   assert.deepEqual(snapshot.handlers.map(({ kind, messageType }) => ({ kind, messageType })), [
     { kind: "syncEvent", messageType: "ChangedEvent" },
