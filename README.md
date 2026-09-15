@@ -113,6 +113,8 @@ node dist/tiangz-design.cjs --input .\DesignRequest.json
 
 模块导航只在可信工作区调用宿主 Node 工具，不启动服务器、不运行 Cargo、不改文件。静态入口可达不等于声明必定执行，type-only 导入不加载行为；动态注册无法据此确认。输出只做导航，不授予热更许可，也不替代宿主类型/构建检查。
 
+开发模式的 Problems 匹配器按宿主 `[tiangz-dev-check] begin/end` 划分检查轮次，支持失败后的下一轮重新检查；宿主需包含这组信号。该契约按 [VS Code 持续任务规则](https://code.visualstudio.com/docs/debugtest/tasks#background-watching-tasks) 接入，检查结束不表示 Watcher/游戏已就绪，不能据此宣称自动附加调试器。真实编辑器中的刷新效果仍需人工验收。
+
 存在根目录 `tiangz.project.json` 时，“TiangZ 工程”树转为模块导航与宿主检查入口，不再用只认识 `app/` 的旧索引扫描模块配置，也不显示旧主工程 Process 启动入口。声明损坏同样不会静默回退；由宿主检查给出修复错误。旧 CLI `tiangz-check-project` 明确拒绝独立模块工程，请使用工程内 `npm run check`。模块源码的实时语义诊断未在旧 LSP 中实现；宿主检查任务仍将错误定位到 Problems 面板。
 
 默认配置适用于 TiangZ 主仓库：

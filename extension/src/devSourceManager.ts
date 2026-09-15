@@ -38,8 +38,9 @@ export class DevSourceManager implements vscode.Disposable {
         invoked = true;
         return terminal;
       }),
-      ["$tsc", "$tiangz-module"],
+      ["$tiangz-tsc-watch", "$tiangz-module-watch"],
     );
+    task.isBackground = true;
     task.presentationOptions = {
       reveal: vscode.TaskRevealKind.Always,
       panel: vscode.TaskPanelKind.Dedicated,

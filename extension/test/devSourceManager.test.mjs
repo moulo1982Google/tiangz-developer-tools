@@ -52,6 +52,8 @@ function harness() {
 test("module dev delegates directly to its declared host with no shell and one task owner", async () => {
   const { state, manager, spec, terminal } = harness();
   await manager.start(spec);
+  assert.equal(state.tasks[0].isBackground, true);
+  assert.deepEqual([...state.tasks[0].matchers], ["$tiangz-tsc-watch", "$tiangz-module-watch"]);
   await assert.rejects(manager.start(spec), /已经运行/);
   (await terminal()).open();
   const child = state.children[0];

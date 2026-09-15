@@ -76,6 +76,26 @@
           "code": 4,
           "message": 5
         }
+      },
+      {
+        "name": "tiangz-module-watch",
+        "label": "TiangZ 模块持续检查",
+        "base": "$tiangz-module",
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": "^\\[tiangz-dev-check\\] begin$",
+          "endsPattern": "^\\[tiangz-dev-check\\] end$"
+        }
+      },
+      {
+        "name": "tiangz-tsc-watch",
+        "label": "TiangZ TypeScript 持续检查",
+        "base": "$tsc",
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": "^\\[tiangz-dev-check\\] begin$",
+          "endsPattern": "^\\[tiangz-dev-check\\] end$"
+        }
       }
     ],
     "taskDefinitions": [

@@ -58,6 +58,18 @@ test("module diagnostics preserve absolute paths, positions and error codes", as
     assert.equal(result[matcher.pattern.message], "State belongs in Model");
   }
 });
+test("watch matchers inherit diagnostics and delimit host check cycles, not runtime readiness", async () => {
+  const manifest = JSON.parse(await readFile(path.join(root, "extension/package.json"), "utf8"));
+  for (const [name, base] of [["tiangz-module-watch", "$tiangz-module"], ["tiangz-tsc-watch", "$tsc"]]) {
+    const matcher = manifest.contributes.problemMatchers.find(item => item.name === name);
+    assert.equal(matcher.base, base);
+    assert.equal(matcher.background.activeOnStart, true);
+    assert.match("[tiangz-dev-check] begin", new RegExp(matcher.background.beginsPattern));
+    assert.match("[tiangz-dev-check] end", new RegExp(matcher.background.endsPattern));
+    assert.doesNotMatch("[dev] 已提交 Reload：candidate", new RegExp(matcher.background.endsPattern));
+    assert.doesNotMatch("Runtime ready", new RegExp(matcher.background.endsPattern));
+  }
+});
 test("creation previews destination and delegates initial generation only after confirmation", async () => {
   const { state, createModuleProject } = harness();
   state.confirm = undefined;
