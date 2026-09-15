@@ -6,6 +6,8 @@ TiangZ 框架的工程模型、静态检查与 VS Code 开发工具。
 
 ## 当前能力
 
+- 提供独立“TiangZ 模块”导航树，由所选 TiangZ 宿主 `tools/inspect_game_modules.mjs --json` 提供入口、状态类型、System/Handler 绑定、直接依赖和疑似漏加载提示；插件不复制模块解析与兼容规则。需要支持该命令的宿主（当前 0.6 开发线），不会因为版本号相同就假定工具已存在。
+
 - 扫描 `configs/<环境>/**/*.json`，展开`knownSceneFiles`共享启动目录，建立 Environment、Machine、Process 和入口 Scene 模型。
 - 使用 TypeScript Compiler API 识别 `@entryScene`、`@scene`、`@component`，并兼容旧版 `@actor`。
 - 从服务端生成文件索引 RPC、Message、Request、Response、MsgCode 与 Descriptor。
@@ -98,6 +100,10 @@ node dist/tiangz-design.cjs --input .\DesignRequest.json
 ```
 
 ## 配置
+
+独立模块工程可设置 `tiangzDeveloperTools.engineRoot` 指向宿主目录（例如 `../TiangZ`），`tiangzDeveloperTools.modulesDirectory` 指向模块集合父目录（默认 `modules`）。两者均相对当前工作区解析。执行“TiangZ：读取模块结构”后，可从“TiangZ 模块”树跳转入口、状态类型和行为绑定；首次和源码改动后均显式刷新，不自动执行工作区脚本。
+
+模块导航只在可信工作区调用宿主 Node 工具，不启动服务器、不运行 Cargo、不改文件。静态入口可达不等于声明必定执行，type-only 导入不加载行为；动态注册无法据此确认。输出只做导航，不授予热更许可，也不替代宿主类型/构建检查。旧“TiangZ 工程”树和运行命令仍按原主工程配置工作，不因新增导航自动迁移为模块启动入口。
 
 默认配置适用于 TiangZ 主仓库：
 

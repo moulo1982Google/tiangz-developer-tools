@@ -20,6 +20,7 @@
     }
   },
   "activationEvents": [
+    "workspaceContains:**/tiangz.module.json",
     "workspaceContains:configs",
     "workspaceContains:app/core"
   ],
@@ -101,12 +102,31 @@
     "views": {
       "explorer": [
         {
+          "id": "tiangzModules",
+          "name": "TiangZ 模块"
+        },
+        {
           "id": "tiangzProject",
           "name": "TiangZ 工程"
         }
       ]
     },
+    "viewsWelcome": [
+      {
+        "view": "tiangzModules",
+        "contents": "查看独立模块的入口、状态、行为和依赖。分析由 TiangZ 宿主通用工具完成，不启动游戏。\n[读取模块结构](command:tiangzDeveloperTools.inspectModules)\n独立工程请先设置 tiangzDeveloperTools.engineRoot；模块集合默认位于 modules。"
+      }
+    ],
     "commands": [
+      {
+        "command": "tiangzDeveloperTools.inspectModules",
+        "title": "TiangZ：读取模块结构",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "tiangzDeveloperTools.openModuleLocation",
+        "title": "TiangZ：打开模块位置"
+      },
       {
         "command": "tiangzDeveloperTools.refreshProject",
         "title": "TiangZ：刷新工程索引",
@@ -240,6 +260,11 @@
     ],
     "menus": {
       "view/title": [
+        {
+          "command": "tiangzDeveloperTools.inspectModules",
+          "when": "view == tiangzModules",
+          "group": "navigation"
+        },
         {
           "command": "tiangzDeveloperTools.refreshProject",
           "when": "view == tiangzProject",
@@ -412,6 +437,18 @@
     "configuration": {
       "title": "TiangZ Developer Tools",
       "properties": {
+        "tiangzDeveloperTools.engineRoot": {
+          "type": "string",
+          "default": ".",
+          "scope": "resource",
+          "description": "提供模块通用工具的 TiangZ 主工程目录；相对当前工作区解析。只在主动执行模块命令时调用其中工具。"
+        },
+        "tiangzDeveloperTools.modulesDirectory": {
+          "type": "string",
+          "default": "modules",
+          "scope": "resource",
+          "description": "模块集合父目录，相对当前工作区解析；依赖模块须位于同一集合。"
+        },
         "tiangzDeveloperTools.configRoot": {
           "type": "string",
           "default": "configs",

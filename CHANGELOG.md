@@ -2,6 +2,8 @@
 
 ## 未发布
 
+- 新增“TiangZ 模块”导航树：复用宿主只读 `modules:inspect --json`，呈现入口、公开 API、依赖、状态类型、行为绑定和疑似漏加载提示。支持独立工程配置 engineRoot/modulesDirectory；可信工作区、显式刷新、超时/取消与源位置校验，不启动游戏或复制热更规则。
+
 - 增加 `tiangz-new-component` 组件脚手架：一次生成可复用 Model、领域门面和 Hotfix System，并自动追加 `app/model/public.ts` 导出。
 - 组件脚手架默认拒绝覆盖已有文件，校验工程根目录和保留领域名，并支持 `--dry-run` 预览。
 - VS Code 增加“TiangZ：新建 Component”命令，与 CLI 复用同一套模板、工程校验和冲突保护。
