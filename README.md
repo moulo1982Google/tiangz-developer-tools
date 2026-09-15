@@ -115,6 +115,8 @@ node dist/tiangz-design.cjs --input .\DesignRequest.json
 
 开发模式的 Problems 匹配器按宿主 `[tiangz-dev-check] begin/end` 划分检查轮次，支持失败后的下一轮重新检查；宿主需包含这组信号。该契约按 [VS Code 持续任务规则](https://code.visualstudio.com/docs/debugtest/tasks#background-watching-tasks) 接入，检查结束不表示 Watcher/游戏已就绪，不能据此宣称自动附加调试器。真实编辑器中的刷新效果仍需人工验收。
 
+可选真实编辑器测试入口为 `extension/test/editor/index.cjs`，不在默认 Node 单测中运行。按 [VS Code 扩展测试入口](https://code.visualstudio.com/api/working-with-extensions/testing-extension) 使用 `--extensionDevelopmentPath=<本仓库>/extension` 和 `--extensionTestsPath=<本仓库>/extension/test/editor/index.cjs`，并指定一次性教学工程、独立 `--user-data-dir`、独立 `--extensions-dir` 和 `--disable-extensions`。先由用户在该隔离配置中显式信任测试工程，再运行测试；测试不会关闭或绕过工作区信任。它验证扩展激活、真实任务诊断位置及两次错误/恢复轮次，不启动游戏或写业务源码。2026-09-16 本机尝试在信任检查处停止，因此不记为真实 Problems 刷新验收通过。
+
 存在根目录 `tiangz.project.json` 时，“TiangZ 工程”树转为模块导航与宿主检查入口，不再用只认识 `app/` 的旧索引扫描模块配置，也不显示旧主工程 Process 启动入口。声明损坏同样不会静默回退；由宿主检查给出修复错误。旧 CLI `tiangz-check-project` 明确拒绝独立模块工程，请使用工程内 `npm run check`。模块源码的实时语义诊断未在旧 LSP 中实现；宿主检查任务仍将错误定位到 Problems 面板。
 
 默认配置适用于 TiangZ 主仓库：
