@@ -56,7 +56,7 @@ export async function createModuleProject(): Promise<void> {
 }
 
 async function launchTask(folder: vscode.WorkspaceFolder, label: string, script: string, args: string[], cwd: string): Promise<void> {
-  const task = new vscode.Task({ type: "tiangz-module-project", operation: path.basename(script) === "create_game_project.mjs" ? "create" : args[0] }, folder, label, "TiangZ", new vscode.ProcessExecution("node", [script, ...args], { cwd }), ["$tsc"]);
+  const task = new vscode.Task({ type: "tiangz-module-project", operation: path.basename(script) === "create_game_project.mjs" ? "create" : args[0] }, folder, label, "TiangZ", new vscode.ProcessExecution("node", [script, ...args], { cwd }), ["$tsc", "$tiangz-module"]);
   task.presentationOptions = { reveal: vscode.TaskRevealKind.Always, panel: vscode.TaskPanelKind.Dedicated, clear: true, showReuseMessage: false };
   await vscode.tasks.executeTask(task);
 }

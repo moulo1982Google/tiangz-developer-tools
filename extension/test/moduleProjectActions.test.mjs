@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
 import { runInNewContext } from "node:vm";
 import { build } from "esbuild";
+import { readFile } from "node:fs/promises";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const bundled = await build({ entryPoints: [path.join(root, "extension/src/moduleProjectActions.ts")], bundle: true, write: false, platform: "node", format: "cjs", external: ["vscode"] });
@@ -35,6 +36,20 @@ test("module action uses declared host and argument-array task, not copied build
   assert.equal(path.basename(task.execution.args[0]), "game_project.mjs");
   assert.deepEqual([...task.execution.args.slice(1)], ["check", "--project", path.resolve("/game")]);
   assert.equal(task.execution.options.cwd, path.resolve("/engine with spaces"));
+  assert.deepEqual([...task.matchers], ["$tsc", "$tiangz-module"]);
+});
+test("module diagnostics preserve absolute paths, positions and error codes", async () => {
+  const manifest = JSON.parse(await readFile(path.join(root, "extension/package.json"), "utf8"));
+  const matcher = manifest.contributes.problemMatchers.find(item => item.name === "tiangz-module");
+  for (const file of ["D:/game with spaces/CounterSystem.ts", "/tmp/my game/CounterSystem.ts"]) {
+    const result = new RegExp(matcher.pattern.regexp).exec(`${file}:6:3 [tiangz.hotfix.instance-state] State belongs in Model`);
+    assert.ok(result);
+    assert.equal(result[matcher.pattern.file], file);
+    assert.equal(result[matcher.pattern.line], "6");
+    assert.equal(result[matcher.pattern.column], "3");
+    assert.equal(result[matcher.pattern.code], "tiangz.hotfix.instance-state");
+    assert.equal(result[matcher.pattern.message], "State belongs in Model");
+  }
 });
 test("creation previews destination and delegates initial generation only after confirmation", async () => {
   const { state, createModuleProject } = harness();
