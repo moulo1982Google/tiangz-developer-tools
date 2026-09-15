@@ -16,6 +16,7 @@ function harness() {
     dispose() {}
   }
   const vscode = {
+    workspace: { isTrusted: true },
     EventEmitter: Emitter,
     Task: class { constructor(definition, scope, name, source, execution, matchers) { Object.assign(this, { definition, scope, name, source, execution, matchers }); } },
     CustomExecution: class { constructor(callback) { this.callback = callback; } },
@@ -45,7 +46,7 @@ function harness() {
     terminal.onDidClose(code => state.exits.push(code));
     return terminal;
   }
-  return { state, manager, spec, terminal };
+  return { state, manager, spec, terminal, vscode };
 }
 
 test("module dev delegates directly to its declared host with no shell and one task owner", async () => {
@@ -75,6 +76,49 @@ test("stopping a queued task before terminal open never launches a child", async
   taskTerminal.open();
   assert.equal(state.children.length, 0);
   assert.deepEqual(state.exits, [0]);
+});
+test("cancellation before CustomExecution still delivers exit once terminal listeners exist", async () => {
+  const { state, manager, spec, terminal } = harness();
+  await manager.start(spec);
+  manager.stop();
+  const taskTerminal = await terminal();
+  taskTerminal.open();
+  assert.equal(state.children.length, 0);
+  assert.deepEqual(state.exits, [0]);
+});
+test("rerunning a completed task acquires a fresh session instead of a disposed terminal", async () => {
+  const { state, manager, spec, terminal } = harness();
+  await manager.start(spec);
+  const first = await terminal(); first.open();
+  await assert.rejects(terminal(), /已经运行/);
+  state.children[0].emit("exit", 0);
+  const second = await terminal();
+  assert.notEqual(second, first);
+  second.open();
+  assert.equal(state.children.length, 2);
+  manager.stop();
+  assert.deepEqual(state.children[1].writes, ["shutdown\n"]);
+  state.children[1].emit("exit", 0);
+  assert.deepEqual(state.exits, [0, 0]);
+});
+test("rerun cannot bypass revoked trust or a disposed task manager", async () => {
+  const { state, manager, spec, terminal, vscode } = harness();
+  await manager.start(spec); (await terminal()).open();
+  state.children[0].emit("exit", 0);
+  vscode.workspace.isTrusted = false;
+  await assert.rejects(terminal(), /信任工作区/);
+  vscode.workspace.isTrusted = true;
+  manager.dispose();
+  await assert.rejects(terminal(), /已关闭/);
+  assert.equal(state.children.length, 1);
+});
+test("revoking trust while a task is queued prevents the initial process launch", async () => {
+  const { state, manager, spec, terminal, vscode } = harness();
+  await manager.start(spec);
+  vscode.workspace.isTrusted = false;
+  (await terminal()).open();
+  assert.equal(state.children.length, 0);
+  assert.deepEqual(state.exits, [1]);
 });
 
 test("Ctrl+C requests graceful stop and a nonzero exit is not reported as success", async () => {

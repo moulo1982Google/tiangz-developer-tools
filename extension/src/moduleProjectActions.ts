@@ -63,6 +63,7 @@ export async function createModuleComponent(): Promise<void> {
 }
 
 function hostJson(engine: string, script: string, args: string[]): Promise<Record<string, unknown>> {
+  trusted();
   return new Promise((resolve, reject) => {
     execFile("node", [path.join(engine, "tools", script), ...args], { cwd: engine, windowsHide: true, timeout: 30_000, maxBuffer: 8 * 1024 * 1024 }, (error, stdout, stderr) => {
       let value;
@@ -121,6 +122,7 @@ export async function createModuleProject(): Promise<void> {
 }
 
 async function launchTask(folder: vscode.WorkspaceFolder, label: string, script: string, args: string[], cwd: string): Promise<void> {
+  trusted();
   const operation = path.basename(script) === "create_game_project.mjs" ? "create" : path.basename(script) === "create_module_component.mjs" ? "new-component" : args[0];
   const task = new vscode.Task({ type: "tiangz-module-project", operation }, folder, label, "TiangZ", new vscode.ProcessExecution("node", [script, ...args], { cwd }), ["$tsc", "$tiangz-module"]);
   task.presentationOptions = { reveal: vscode.TaskRevealKind.Always, panel: vscode.TaskPanelKind.Dedicated, clear: true, showReuseMessage: false };

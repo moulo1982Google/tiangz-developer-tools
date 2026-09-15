@@ -13,19 +13,31 @@ interface DevSourceLaunchSpec {
 /** 管理唯一的源码开发任务，并确保停止操作先进入Watcher优雅停机协议。 / Manages the single source-development task and ensures stop first enters the Watcher graceful-shutdown protocol. */
 export class DevSourceManager implements vscode.Disposable {
   private active: DevSourceTerminal | undefined;
+  private disposed = false;
 
   public async start(spec: DevSourceLaunchSpec): Promise<void> {
-    if (this.active) throw new Error("源码开发模式已经运行；请先停止现有任务");
-    const terminal = new DevSourceTerminal(spec, () => {
-      if (this.active === terminal) this.active = undefined;
-    });
-    this.active = terminal;
+    const acquireTerminal = () => {
+      if (this.disposed) throw new Error("开发任务管理器已关闭，请重新加载插件");
+      if (!vscode.workspace.isTrusted) throw new Error("请先信任工作区，才能启动开发模式");
+      if (this.active) throw new Error("源码开发模式已经运行；请先停止现有任务");
+      const created = new DevSourceTerminal(spec, () => {
+        if (this.active === created) this.active = undefined;
+      });
+      this.active = created;
+      return created;
+    };
+    let terminal = acquireTerminal();
+    let invoked = false;
     const task = new vscode.Task(
       { type: "tiangz-dev-source", config: spec.configRelativePath },
       spec.folder,
       `源码开发模式 (${spec.machineName})`,
       "TiangZ",
-      new vscode.CustomExecution(async () => terminal),
+      new vscode.CustomExecution(async () => {
+        if (invoked) terminal = acquireTerminal();
+        invoked = true;
+        return terminal;
+      }),
       ["$tsc", "$tiangz-module"],
     );
     task.presentationOptions = {
@@ -37,7 +49,7 @@ export class DevSourceManager implements vscode.Disposable {
     try {
       await vscode.tasks.executeTask(task);
     } catch (error) {
-      if (this.active === terminal) this.active = undefined;
+      terminal.stop();
       throw error;
     }
   }
@@ -48,6 +60,7 @@ export class DevSourceManager implements vscode.Disposable {
   }
 
   public dispose(): void {
+    this.disposed = true;
     this.active?.stop();
     this.active = undefined;
   }
@@ -70,7 +83,13 @@ class DevSourceTerminal implements vscode.Pseudoterminal {
   ) {}
 
   public open(): void {
-    if (this.finished || this.stopping) return;
+    if (this.finished) return;
+    if (this.stopping) { this.finish(0); return; }
+    if (!vscode.workspace.isTrusted) {
+      this.written.fire("[TiangZ] 工作区信任已撤销，未启动开发进程。\r\n");
+      this.finish(1);
+      return;
+    }
     this.written.fire(`TiangZ 源码开发模式：${this.spec.machineName}\r\n`);
     this.written.fire(`Config: ${this.spec.configRelativePath}\r\n\r\n`);
     const engine = this.spec.moduleEngineRoot;
@@ -112,7 +131,8 @@ class DevSourceTerminal implements vscode.Pseudoterminal {
     this.written.fire("\r\n[TiangZ] 正在优雅停止源码开发模式...\r\n");
     const child = this.child;
     if (!child) {
-      this.finish(0);
+      // 任务可能尚未注册终端事件；open 时再发退出事件，防止排队取消后悬挂。 / Terminal listeners may not exist yet; emit exit on open so queued cancellation cannot hang.
+      this.onFinished();
       return;
     }
     if (child.stdin.writable) child.stdin.write("shutdown\n");
