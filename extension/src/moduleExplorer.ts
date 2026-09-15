@@ -41,9 +41,20 @@ export class ModuleExplorer implements vscode.TreeDataProvider<NavigationNode>, 
       const folder = folders.length === 1 ? folders[0] : await vscode.window.showWorkspaceFolderPick({ placeHolder: "选择模块所在的游戏工程" });
       if (!folder) return;
       const config = vscode.workspace.getConfiguration("tiangzDeveloperTools", folder.uri);
-      const engineRoot = path.resolve(folder.uri.fsPath, config.get<string>("engineRoot", "."));
-      const modulesDirectory = path.resolve(folder.uri.fsPath, config.get<string>("modulesDirectory", "modules"));
-      const script = path.join(engineRoot, "tools", "inspect_game_modules.mjs");
+      let engineRoot = path.resolve(folder.uri.fsPath, config.get<string>("engineRoot", "."));
+      let invocation = ["--modules-dir", path.resolve(folder.uri.fsPath, config.get<string>("modulesDirectory", "modules")), "--json"];
+      let scriptName = "inspect_game_modules.mjs";
+      let projectBytes: Uint8Array | undefined;
+      try { projectBytes = await vscode.workspace.fs.readFile(vscode.Uri.joinPath(folder.uri, "tiangz.project.json")); }
+      catch (error) { if (!(error && typeof error === "object" && "code" in error && error.code === "FileNotFound")) throw error; }
+      if (projectBytes) {
+        const project: unknown = JSON.parse(new TextDecoder().decode(projectBytes));
+        if (!project || typeof project !== "object" || !("engineRoot" in project) || typeof project.engineRoot !== "string" || !project.engineRoot.trim()) throw new Error("tiangz.project.json 缺少 engineRoot；请修复工程声明，不回退其他宿主。");
+        engineRoot = path.resolve(folder.uri.fsPath, project.engineRoot);
+        invocation = ["inspect", "--project", folder.uri.fsPath, "--json"];
+        scriptName = "game_project.mjs";
+      }
+      const script = path.join(engineRoot, "tools", scriptName);
       try { await vscode.workspace.fs.stat(vscode.Uri.file(script)); }
       catch { throw new Error(`找不到模块导航工具：${script}\n请在此工作区设置 tiangzDeveloperTools.engineRoot 指向 TiangZ 主工程，并使用支持 modules:inspect 的宿主。`); }
       // Clear stale data immediately; a failed inspection must not leave a healthy-looking old tree.
@@ -51,7 +62,7 @@ export class ModuleExplorer implements vscode.TreeDataProvider<NavigationNode>, 
       this.changed.fire(undefined);
       const report = await vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title: "TiangZ：读取模块结构", cancellable: true }, async (_, token) => {
         const text = await new Promise<string>((resolve, reject) => {
-          const child = execFile("node", [script, "--modules-dir", modulesDirectory, "--json"], { cwd: engineRoot, windowsHide: true, timeout: 30_000, maxBuffer: 16 * 1024 * 1024 }, (error, stdout, stderr) => {
+          const child = execFile("node", [script, ...invocation], { cwd: engineRoot, windowsHide: true, timeout: 30_000, maxBuffer: 16 * 1024 * 1024 }, (error, stdout, stderr) => {
             cancellation.dispose();
             if (token.isCancellationRequested) { reject(new Error("已取消模块导航。")); return; }
             if (error) {
@@ -68,7 +79,7 @@ export class ModuleExplorer implements vscode.TreeDataProvider<NavigationNode>, 
       });
       this.nodes = reportNodes(report, folder.name);
       this.output.clear();
-      this.output.appendLine(`宿主：${engineRoot}\n模块目录：${modulesDirectory}\n${report.limitations.join("\n")}`);
+      this.output.appendLine(`宿主：${engineRoot}\n模块目录：${report.modulesDirectory}\n${report.limitations.join("\n")}`);
       this.changed.fire(undefined);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);

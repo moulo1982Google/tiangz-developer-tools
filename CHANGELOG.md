@@ -2,6 +2,8 @@
 
 ## 未发布
 
+- 模块导航支持 tiangz.project.json 自动选择宿主；新增入门工程创建向导和有限的准备/检查/构建任务，复用宿主通用命令，不复制模板或更改协议锁规则。
+
 - 新增“TiangZ 模块”导航树：复用宿主只读 `modules:inspect --json`，呈现入口、公开 API、依赖、状态类型、行为绑定和疑似漏加载提示。支持独立工程配置 engineRoot/modulesDirectory；可信工作区、显式刷新、超时/取消与源位置校验，不启动游戏或复制热更规则。
 
 - 增加 `tiangz-new-component` 组件脚手架：一次生成可复用 Model、领域门面和 Hotfix System，并自动追加 `app/model/public.ts` 导出。

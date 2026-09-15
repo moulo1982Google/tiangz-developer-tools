@@ -16,18 +16,18 @@ const report = () => ({ formatVersion: 1, engineVersion: "0.6.0-alpha.0", module
 }] });
 
 function harness() {
-  const state = { calls: [], errors: [], text: JSON.stringify(report()), error: null, missing: false, opened: undefined };
+  const state = { calls: [], errors: [], text: JSON.stringify(report()), error: null, missing: false, opened: undefined, project: undefined };
   const vscode = {
     EventEmitter: class { event = () => {}; fire() {} dispose() {} },
     ThemeIcon: class { constructor(id) { this.id = id; } },
     TreeItem: class { constructor(label, collapsibleState) { this.label = label; this.collapsibleState = collapsibleState; } },
     TreeItemCollapsibleState: { Collapsed: 1, None: 0 }, ProgressLocation: { Notification: 15 },
-    Uri: { file: file => ({ fsPath: path.resolve(file) }) },
+    Uri: { file: file => ({ fsPath: path.resolve(file) }), joinPath: (uri, file) => ({ fsPath: path.join(uri.fsPath, file) }) },
     Position: class { constructor(line, character) { this.line = line; this.character = character; } },
     Range: class { constructor(start, end) { this.start = start; this.end = end; } },
     workspace: { isTrusted: true, workspaceFolders: [{ name: "Game", uri: { fsPath: path.resolve("/game with spaces") } }],
       getConfiguration: () => ({ get: (key, fallback) => key === "engineRoot" ? "../engine with spaces" : fallback }),
-      fs: { stat: async () => { if (state.missing) throw new Error("missing"); return {}; } },
+      fs: { stat: async () => { if (state.missing) throw new Error("missing"); return {}; }, readFile: async () => { if (state.project === undefined) throw Object.assign(new Error("missing"), { code: "FileNotFound" }); return new TextEncoder().encode(state.project); } },
       openTextDocument: async uri => uri,
     },
     window: {
@@ -39,7 +39,7 @@ function harness() {
   };
   const require = createRequire(import.meta.url);
   const module = { exports: {} };
-  runInNewContext(bundle.outputFiles[0].text, { module, exports: module.exports, console,
+  runInNewContext(bundle.outputFiles[0].text, { module, exports: module.exports, console, TextDecoder,
     require: name => name === "vscode" ? vscode : name === "node:child_process" ? {
       execFile: (command, args, options, callback) => {
         state.calls.push({ command, args, options });
@@ -94,5 +94,21 @@ test("failed refresh removes stale success tree and exposes the host diagnostic"
   await explorer.refresh();
   assert.match(explorer.getChildren()[0].label, /未完成/);
   assert.match(state.errors[0], /missing dependency/);
+  explorer.dispose();
+});
+
+test("project descriptor delegates complete validation to the host without duplicated module settings", async () => {
+  const { state, ModuleExplorer } = harness();
+  const explorer = new ModuleExplorer();
+  state.project = JSON.stringify({ formatVersion: 1, engineRoot: "../declared engine" });
+  await explorer.refresh();
+  assert.equal(state.errors.length, 0);
+  assert.equal(path.basename(state.calls[0].args[0]), "game_project.mjs");
+  assert.deepEqual([...state.calls[0].args.slice(1)], ["inspect", "--project", path.resolve("/game with spaces"), "--json"]);
+  assert.equal(state.calls[0].options.cwd, path.resolve("/declared engine"));
+  state.project = "{}";
+  await explorer.refresh();
+  assert.equal(state.calls.length, 1, "invalid project does not fall back to default host");
+  assert.match(state.errors[0], /不回退/);
   explorer.dispose();
 });

@@ -20,6 +20,7 @@
     }
   },
   "activationEvents": [
+    "workspaceContains:tiangz.project.json",
     "workspaceContains:**/tiangz.module.json",
     "workspaceContains:configs",
     "workspaceContains:app/core"
@@ -60,6 +61,11 @@
   },
   "contributes": {
     "taskDefinitions": [
+      {
+        "type": "tiangz-module-project",
+        "required": ["operation"],
+        "properties": { "operation": { "type": "string", "description": "由 TiangZ 宿主实现的模块工程动作。" } }
+      },
       {
         "type": "tiangz-process",
         "required": [
@@ -114,10 +120,12 @@
     "viewsWelcome": [
       {
         "view": "tiangzModules",
-        "contents": "查看独立模块的入口、状态、行为和依赖。分析由 TiangZ 宿主通用工具完成，不启动游戏。\n[读取模块结构](command:tiangzDeveloperTools.inspectModules)\n独立工程请先设置 tiangzDeveloperTools.engineRoot；模块集合默认位于 modules。"
+        "contents": "查看独立模块的入口、状态、行为和依赖。分析由 TiangZ 宿主通用工具完成，不启动游戏。\n[创建入门工程](command:tiangzDeveloperTools.createModuleProject)\n[读取模块结构](command:tiangzDeveloperTools.inspectModules)\n[模块工程操作](command:tiangzDeveloperTools.moduleProjectAction)\n新工程自动读取 tiangz.project.json。旧独立工程请设置 tiangzDeveloperTools.engineRoot；模块集合默认位于 modules。"
       }
     ],
     "commands": [
+      { "command": "tiangzDeveloperTools.createModuleProject", "title": "TiangZ：创建模块入门工程", "icon": "$(new-folder)" },
+      { "command": "tiangzDeveloperTools.moduleProjectAction", "title": "TiangZ：模块工程操作", "icon": "$(tools)" },
       {
         "command": "tiangzDeveloperTools.inspectModules",
         "title": "TiangZ：读取模块结构",
@@ -260,6 +268,8 @@
     ],
     "menus": {
       "view/title": [
+        { "command": "tiangzDeveloperTools.createModuleProject", "when": "view == tiangzModules", "group": "navigation@2" },
+        { "command": "tiangzDeveloperTools.moduleProjectAction", "when": "view == tiangzModules", "group": "navigation@3" },
         {
           "command": "tiangzDeveloperTools.inspectModules",
           "when": "view == tiangzModules",

@@ -28,6 +28,7 @@ import { ProjectTreeProvider, type ProjectNode } from "./projectTree.js";
 import { TiangZProcessManager } from "./processManager.js";
 import { openRuntimeMetrics } from "./runtimeInspector.js";
 import { ModuleExplorer, openModuleLocation } from "./moduleExplorer.js";
+import { createModuleProject, runModuleProjectAction } from "./moduleProjectActions.js";
 
 const INDEX_FILES_NOTIFICATION = "tiangzProject/indexFiles";
 const SNAPSHOT_NOTIFICATION = "tiangzProject/snapshot";
@@ -63,6 +64,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.window.createTreeView("tiangzModules", { treeDataProvider: moduleExplorer, showCollapseAll: true }),
     vscode.commands.registerCommand("tiangzDeveloperTools.inspectModules", () => moduleExplorer.refresh()),
     vscode.commands.registerCommand("tiangzDeveloperTools.openModuleLocation", openModuleLocation),
+    vscode.commands.registerCommand("tiangzDeveloperTools.createModuleProject", () => runCommand(createModuleProject)),
+    vscode.commands.registerCommand("tiangzDeveloperTools.moduleProjectAction", () => runCommand(runModuleProjectAction)),
   );
   const tree = new ProjectTreeProvider();
   const processManager = new TiangZProcessManager(vscode.window.createOutputChannel("TiangZ 启动与构建"));
