@@ -2,7 +2,9 @@
 
 ## 用途
 
-`tiangz-check-project` 在不启动 VS Code 的情况下检查 TiangZ 工程。它与 Language Server 共用 `project-core`，因此本地 Problems 面板和 CI 不会维护两套规则。
+`tiangz-check-project` 在不启动 VS Code 的情况下检查采用 `app/` 目录组织的 TiangZ 主工程。它与旧 Language Server 共用 `project-core`，因此这部分本地诊断和 CI 不会维护两套规则。
+
+根目录包含 `tiangz.project.json` 的独立模块工程不使用这个检查器，应在该工程运行 `npm run check`，由声明的 TiangZ 宿主执行模块检查。旧 CLI 会明确拒绝并返回退出码 2；即使声明 JSON 损坏，也不会回退到旧索引并报告“零错误”。插件中使用“TiangZ：模块工程操作”的检查入口。当前旧 LSP 尚未提供独立模块的实时语义诊断，宿主检查任务的 Problems 定位与之不同。
 
 检查范围包括：
 
@@ -60,11 +62,13 @@ tiangz-check-project . --format json
 | --- | --- |
 | `0` | 工程检查通过 |
 | `1` | 存在错误，或启用 `--warnings-as-errors` 后存在警告 |
-| `2` | 参数错误、工程路径错误或检查器自身错误 |
+| `2` | 参数错误、工程路径错误、不适用的独立模块工程或检查器自身错误 |
 
 CI 只需使用命令的退出码，无需解析输出文本。
 
 ## CI 示例
+
+以下示例仅适用于 TiangZ 主工程；独立模块工程应先按自身 README 准备宿主依赖和生成物，再在游戏目录执行 `npm run check`。不要用旧 CLI 的扫描结果替代宿主模块检查。
 
 安装依赖后运行：
 
