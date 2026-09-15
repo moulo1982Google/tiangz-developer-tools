@@ -73,6 +73,9 @@ class DevSourceTerminal implements vscode.Pseudoterminal {
   private stopTimer: NodeJS.Timeout | undefined;
   private stopping = false;
   private finished = false;
+  private input = "";
+  private inputOverflow = false;
+  private lastInputWasCR = false;
 
   public readonly onDidWrite = this.written.event;
   public readonly onDidClose = this.closed.event;
@@ -114,10 +117,36 @@ class DevSourceTerminal implements vscode.Pseudoterminal {
     this.child.once("exit", (code) => this.finish(code ?? -1));
   }
 
-  /** 将任务终端输入交给开发宿主，因此仍可手工执行Watcher的reload或shutdown命令。 / Forwards task-terminal input to the development host so manual Watcher reload or shutdown commands remain available. */
+  /** 回显并按完整行提交控制命令，停止操作不会拼接到未完成输入。 / Echo and submit complete command lines so shutdown cannot append to partial input. */
   public handleInput(data: string): void {
-    if (data.includes("\u0003")) { this.stop(); return; }
-    if (!this.stopping && this.child?.stdin.writable) this.child.stdin.write(data);
+    if (this.stopping || !this.child?.stdin.writable) return;
+    for (const character of data.replace(/\u001b\[[0-?]*[ -/]*[@-~]/g, "")) {
+      if (character === "\u0003" || character === "\u0004") {
+        this.input = "";
+        this.written.fire(character === "\u0003" ? "^C\r\n" : "^D\r\n");
+        this.stop(); return;
+      }
+      if (character === "\n" && this.lastInputWasCR) { this.lastInputWasCR = false; continue; }
+      this.lastInputWasCR = character === "\r";
+      if (character === "\r" || character === "\n") {
+        const command = this.input;
+        this.input = "";
+        this.written.fire("\r\n");
+        if (this.inputOverflow) { this.inputOverflow = false; continue; }
+        if (command.trim() === "shutdown") { this.stop(); return; }
+        if (command.trim()) this.child.stdin.write(`${command}\n`);
+      } else if (character === "\u007f" || character === "\b") {
+        if (this.input && !this.inputOverflow) {
+          this.input = Array.from(this.input).slice(0, -1).join("");
+          this.written.fire("\b \b");
+        }
+      } else if (character >= " " && !this.inputOverflow) {
+        if (this.input.length >= 8192) {
+          this.input = ""; this.inputOverflow = true;
+          this.written.fire("\r\n[TiangZ] 命令超过 8192 字符，已丢弃本行；回车后重新输入。\r\n");
+        } else { this.input += character; this.written.fire(character); }
+      }
+    }
   }
 
   public close(): void {

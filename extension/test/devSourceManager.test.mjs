@@ -131,6 +131,29 @@ test("Ctrl+C requests graceful stop and a nonzero exit is not reported as succes
   state.children[0].emit("exit", 1);
   assert.deepEqual(state.exits, [1]);
 });
+test("partial terminal input cannot contaminate a graceful shutdown command", async () => {
+  const { state, manager, spec, terminal } = harness();
+  await manager.start(spec);
+  const taskTerminal = await terminal(); taskTerminal.open();
+  taskTerminal.handleInput("reload incomplete path");
+  assert.deepEqual(state.children[0].writes, [], "only complete command lines should be forwarded");
+  manager.stop();
+  assert.deepEqual(state.children[0].writes, ["shutdown\n"]);
+  state.children[0].emit("exit", 0);
+});
+test("terminal echoes input, handles backspace and submits CRLF exactly once", async () => {
+  const { state, manager, spec, terminal } = harness();
+  await manager.start(spec);
+  const taskTerminal = await terminal(); taskTerminal.open();
+  taskTerminal.handleInput("reload pathz\u007f\r\n");
+  assert.deepEqual(state.children[0].writes, ["reload path\n"]);
+  assert.match(state.output.join(""), /reload pathz/);
+  taskTerminal.handleInput("x".repeat(8193) + "\n");
+  assert.equal(state.children[0].writes.length, 1, "oversized lines must not submit truncated commands");
+  taskTerminal.handleInput("shutdown\r");
+  assert.deepEqual(state.children[0].writes, ["reload path\n", "shutdown\n"]);
+  state.children[0].emit("exit", 0);
+});
 
 test("main-project launch remains compatible and startup failure releases ownership", async () => {
   const { state, manager, spec, terminal } = harness();
