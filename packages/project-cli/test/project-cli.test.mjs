@@ -19,6 +19,15 @@ test("returns 0 and JSON for a valid project", async (context) => {
   assert.equal(output.errors, 0);
 });
 
+test("refuses module projects instead of reporting an unperformed check as passed", async (context) => {
+  const root = await fixture(context);
+  await write(root, "tiangz.project.json", "{broken");
+  const result = run(root, "--format", "json");
+  assert.equal(result.status, 2);
+  assert.match(result.stderr, /独立模块工程.*npm run check/);
+  assert.doesNotMatch(result.stdout, /"passed":\s*true/);
+});
+
 test("returns 1 when project diagnostics contain an error", async (context) => {
   const root = await fixture(context);
   await write(root, "app/demo/Broken.ts", "export class {\n");

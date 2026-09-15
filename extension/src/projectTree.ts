@@ -52,6 +52,7 @@ export class ProjectTreeProvider implements vscode.TreeDataProvider<ProjectNode>
         arguments: [element],
       };
     }
+    if (element.command) item.command = element.command;
     return item;
   }
 
@@ -62,6 +63,7 @@ export class ProjectTreeProvider implements vscode.TreeDataProvider<ProjectNode>
 }
 
 export interface ProjectNode {
+  readonly command?: vscode.Command;
   readonly label: string;
   readonly description?: string;
   readonly tooltip?: string;
@@ -82,6 +84,14 @@ function projectNode(
 ): ProjectNode {
   const snapshot = project.snapshot;
   const rootUri = project.folder.uri.toString();
+  if (snapshot.analysisMode === "host-delegated") {
+    return { label: showFolder ? project.folder.name : "TiangZ 独立模块工程", description: "检查由宿主负责",
+      icon: "project", rootUri, children: [
+        { label: "打开模块导航", icon: "extensions", children: [], command: { command: "tiangzModules.focus", title: "打开模块导航" } },
+        { label: "运行模块工程检查", icon: "check", children: [], command: { command: "tiangzDeveloperTools.moduleProjectAction", title: "运行模块工程检查" } },
+        { label: "未在此处执行模块检查；请选择宿主 check", icon: "info", children: [] },
+      ] };
+  }
   const categories = [
     environmentsNode(snapshot, rootUri, statuses),
     generatorsNode(snapshot.generators, rootUri),

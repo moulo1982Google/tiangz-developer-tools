@@ -102,6 +102,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   };
 
   const watchers = [
+    vscode.workspace.createFileSystemWatcher("**/tiangz.project.json"),
     vscode.workspace.createFileSystemWatcher("**/configs/**/*.json"),
     vscode.workspace.createFileSystemWatcher("**/app/**/*.ts"),
     vscode.workspace.createFileSystemWatcher("**/codegen.manifest.json"),
@@ -671,6 +672,7 @@ async function openUriLocation(value: LspLocation | readonly LspLocation[]): Pro
 }
 
 function showSummary(projects: readonly IndexedProject[]): void {
+  const delegatedCount = projects.filter((project) => project.snapshot.analysisMode === "host-delegated").length;
   const totals = projects.reduce((sum, project) => ({
     processes: sum.processes + project.snapshot.processes.length,
     scenes: sum.scenes + project.snapshot.declarations.filter((value) => value.kind === "entryScene" || value.kind === "scene").length,
@@ -681,7 +683,8 @@ function showSummary(projects: readonly IndexedProject[]): void {
   }), { processes: 0, scenes: 0, components: 0, protocols: 0, handlers: 0, diagnostics: 0 });
   void vscode.window.showInformationMessage(
     `TiangZ：${totals.processes} Process，${totals.scenes} Scene，${totals.components} Component，`
-      + `${totals.protocols} 个协议，${totals.handlers} Handler，${totals.diagnostics} 个工程问题`,
+      + `${totals.protocols} 个协议，${totals.handlers} Handler，${totals.diagnostics} 个工程问题`
+      + (delegatedCount ? `；另有 ${delegatedCount} 个独立模块工程未在此检查，请运行宿主 check` : ""),
   );
 }
 

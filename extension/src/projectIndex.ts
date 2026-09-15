@@ -17,6 +17,13 @@ export interface DiscoveredProject {
 }
 
 export async function discoverWorkspaceFolder(folder: vscode.WorkspaceFolder): Promise<DiscoveredProject> {
+  const moduleProject = vscode.Uri.joinPath(folder.uri, "tiangz.project.json");
+  try {
+    await vscode.workspace.fs.stat(moduleProject);
+    return { folder, sourceUris: [moduleProject] };
+  } catch (error) {
+    if (!isFileNotFound(error)) throw error;
+  }
   const configuration = vscode.workspace.getConfiguration("tiangzDeveloperTools", folder.uri);
   const configRoot = normalizeRoot(configuration.get<string>("configRoot", "configs"));
   const initialFileLimit = configuration.get<number>("initialFileLimit", 10_000);

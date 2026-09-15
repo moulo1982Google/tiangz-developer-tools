@@ -60,6 +60,11 @@ interface LifecycleSystemContract {
 }
 
 export function analyzeTiangZProject(sources: readonly ProjectSource[]): TiangZProjectSnapshot {
+  // 文件存在即委托宿主，损坏的声明也不能静默回退主工程规则。 / Never fall back on malformed module descriptors.
+  if (sources.some((source) => normalizePath(source.relativePath) === "tiangz.project.json")) {
+    return { analysisMode: "host-delegated", environments: [], processes: [], machines: [], declarations: [],
+      messageTypes: [], msgcodes: [], protocols: [], handlers: [], generators: [], diagnostics: [] };
+  }
   const processes: ProcessConfigModel[] = [];
   const machines: MachineConfigModel[] = [];
   const declarations: TypeDeclarationModel[] = [];

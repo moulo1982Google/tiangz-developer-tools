@@ -30,6 +30,9 @@ export async function checkProject(
   const root = path.resolve(projectRoot);
   const metadata = await stat(root);
   if (!metadata.isDirectory()) throw new Error(`工程路径不是目录：${root}`);
+  if (await isFile(path.join(root, "tiangz.project.json"))) {
+    throw new Error("这是独立模块工程，旧工程检查器不适用。请在该工程运行 npm run check（声明宿主 tools/tiangz.mjs check），或使用 VS Code 模块工程检查命令。");
+  }
 
   const maxFiles = options.maxFiles ?? 10_000;
   const maxFileSizeBytes = options.maxFileSizeBytes ?? 2 * 1024 * 1024;

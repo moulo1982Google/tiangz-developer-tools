@@ -256,6 +256,27 @@ test("indexes arbitrary Manifest input extensions without stale diagnostics", as
   }
 });
 
+test("module descriptor clears legacy diagnostics even while legacy documents stay open", async () => {
+  const rpc = new StdioRpc(serverPath);
+  try {
+    const rootUri = process.platform === "win32" ? "file:///C:/module-workspace" : "file:///module-workspace";
+    await rpc.request("initialize", { processId: null, rootUri, capabilities: {}, workspaceFolders: [{ uri: rootUri, name: "module" }] });
+    rpc.notify("initialized", {});
+    const configUri = `${rootUri}/configs/local/game.json`;
+    const warned = rpc.waitForNotification("textDocument/publishDiagnostics", params => params.uri === configUri && params.diagnostics.some(item => item.code === "tiangz.config.unknown-entry-scene"));
+    open(rpc, configUri, JSON.stringify({ process: { name: "Counter", identity: { originServerId: 92, workerId: 0 } }, scenes: [{ name: "Counter", sceneType: "Counter" }] }), 1);
+    await warned;
+    const cleared = rpc.waitForNotification("textDocument/publishDiagnostics", params => params.uri === configUri && params.diagnostics.length === 0);
+    const delegated = rpc.waitForNotification("tiangzProject/snapshot", params => params.snapshot.analysisMode === "host-delegated");
+    open(rpc, `${rootUri}/tiangz.project.json`, "{broken", 1);
+    await cleared;
+    assert.deepEqual((await delegated).snapshot.processes, []);
+    await rpc.request("shutdown", null);
+    rpc.notify("exit", null);
+    await rpc.waitForExit();
+  } finally { rpc.dispose(); }
+});
+
 function open(rpc, uri, text, version) {
   rpc.notify("textDocument/didOpen", {
     textDocument: { uri, languageId: "typescript", version, text },

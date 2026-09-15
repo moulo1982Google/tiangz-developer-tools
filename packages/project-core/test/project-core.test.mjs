@@ -9,6 +9,20 @@ import {
   resolveMachineProcessPaths,
 } from "../dist/index.js";
 
+test("module descriptors delegate analysis even when malformed, without legacy false positives", () => {
+  for (const text of ['{"formatVersion":1}', '{broken']) {
+    const snapshot = analyzeTiangZProject([
+      { relativePath: "tiangz.project.json", text },
+      { relativePath: "configs/local/game.json", text: JSON.stringify({ process: { name: "Counter" }, scenes: [{ name: "Counter", sceneType: "Counter" }] }) },
+      { relativePath: "app/legacy/Broken.ts", text: "export class {" },
+    ]);
+    assert.equal(snapshot.analysisMode, "host-delegated");
+    assert.deepEqual(snapshot.diagnostics, []);
+    assert.deepEqual(snapshot.processes, []);
+    assert.deepEqual(snapshot.generators, []);
+  }
+});
+
 test("creates one file discovery plan from the generated manifest", () => {
   const plan = createProjectFilePlan(JSON.stringify({
     version: 1,

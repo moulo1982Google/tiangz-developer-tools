@@ -149,6 +149,8 @@ export interface CodegenGeneratorModel {
 }
 
 export interface TiangZProjectSnapshot {
+  /** 独立模块由声明宿主检查，不套用 app/ 主工程规则。 / Module analysis belongs to its declared host. */
+  readonly analysisMode?: "host-delegated";
   readonly environments: readonly string[];
   readonly processes: readonly ProcessConfigModel[];
   readonly machines: readonly MachineConfigModel[];
