@@ -112,3 +112,22 @@ test("project descriptor delegates complete validation to the host without dupli
   assert.match(state.errors[0], /不回退/);
   explorer.dispose();
 });
+
+test("state/behavior navigation uses host-proven source locations rather than same-named targets", async () => {
+  const { state, ModuleExplorer } = harness();
+  const data = report();
+  const location = data.modules[0].declarations[0].location;
+  data.modules[0].bindings = [
+    { name: "ProbeSystem", kind: "systemFor", layer: "hotfix", generated: false, reachable: true, target: "Alias", targetResolution: "local", targetLocation: location, location: { file: "src/hotfix/ProbeSystem.ts", line: 5, column: 1 } },
+    { name: "OtherSystem", kind: "systemFor", layer: "hotfix", generated: false, reachable: true, target: "Probe", targetResolution: "unresolved", location: { file: "src/hotfix/OtherSystem.ts", line: 5, column: 1 } },
+  ];
+  state.text = JSON.stringify(data);
+  const explorer = new ModuleExplorer();
+  await explorer.refresh();
+  const module = explorer.getChildren(explorer.getChildren()[0])[1];
+  const symbol = explorer.getChildren(module).find(node => node.label === "状态与身份").children[0];
+  assert.equal(symbol.children.length, 1);
+  assert.equal(symbol.children[0].label, "ProbeSystem");
+  assert.equal(symbol.children[0].children[0].uri.fsPath, path.resolve("/game/modules/probe/src/model/Probe.ts"));
+  explorer.dispose();
+});

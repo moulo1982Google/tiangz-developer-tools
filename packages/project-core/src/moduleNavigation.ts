@@ -8,6 +8,8 @@ export interface ModuleSymbol {
   readonly reachable: boolean;
   readonly target?: string;
   readonly descriptor?: string;
+  readonly targetResolution?: "local" | "unresolved";
+  readonly targetLocation?: ModuleLocation;
   readonly location: ModuleLocation;
 }
 export interface ModuleNavigationEntry {
@@ -48,6 +50,8 @@ export function parseModuleNavigation(text: string): ModuleNavigationReport {
       if (!record(symbol) || !strings(symbol, ["name", "kind", "layer"]) || !location(symbol.location)
         || typeof symbol.generated !== "boolean" || typeof symbol.reachable !== "boolean"
         || !(symbol.target === undefined || typeof symbol.target === "string")
+        || !(symbol.targetResolution === undefined || symbol.targetResolution === "local" || symbol.targetResolution === "unresolved")
+        || !(symbol.targetLocation === undefined || location(symbol.targetLocation))
         || !(symbol.descriptor === undefined || typeof symbol.descriptor === "string")) invalid();
     }
     for (const diagnostic of item.diagnostics) {

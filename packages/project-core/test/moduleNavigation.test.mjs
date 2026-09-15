@@ -28,3 +28,9 @@ test("navigation refuses traversal and invalid source positions", () => {
   report.modules[0].declarations[0].location.line = 0;
   assert.throws(() => parseModuleNavigation(JSON.stringify(report)), /格式不兼容/);
 });
+
+test("target navigation locations are validated like primary declarations", () => {
+  const report = fixture();
+  report.modules[0].declarations[0].targetLocation = { file: "../private.ts", line: 1, column: 1 };
+  assert.throws(() => parseModuleNavigation(JSON.stringify(report)), /格式不兼容/);
+});

@@ -111,8 +111,9 @@ function moduleNode(module: ModuleNavigationEntry): NavigationNode {
   const source = (label: string, file: string): NavigationNode => ({ label, description: file, icon: "file-code", uri: vscode.Uri.file(path.join(module.root, file)) });
   const symbol = (item: ModuleSymbol): NavigationNode => ({
     label: item.name, description: `${item.kind}${item.target ? ` → ${item.target}` : ""}${item.reachable ? "" : " · 未静态加载"}`,
-    tooltip: `${item.location.file}:${item.location.line}${item.descriptor ? `\n协议绑定：${item.descriptor}` : ""}`,
+    tooltip: `${item.location.file}:${item.location.line}${item.descriptor ? `\n协议绑定：${item.descriptor}` : ""}${item.targetResolution === "unresolved" ? "\n目标未静态定位，不按同名类型猜测。" : ""}`,
     icon: item.reachable ? "symbol-class" : "warning", ...at(module, item.location),
+    ...(item.targetLocation ? { children: [{ label: "打开目标状态定义", icon: "go-to-file", ...at(module, item.targetLocation) }] } : {}),
   });
   return { label: module.id, description: module.version, tooltip: module.description, icon: "package", children: [
     source("模块声明与依赖", module.manifest),
@@ -120,7 +121,7 @@ function moduleNode(module: ModuleNavigationEntry): NavigationNode {
     source("Hotfix 入口 / 显式加载", module.entries.hotfix),
     ...(module.publicApi ? [source("跨模块公开 API", module.publicApi)] : [{ label: "未声明跨模块公开 API", icon: "lock" }]),
     { label: "直接依赖", icon: "references", children: module.dependencies.map(dep => ({ label: dep.id, icon: "package" })) },
-    { label: "状态与身份", icon: "symbol-namespace", children: module.declarations.filter(item => !item.generated).map(symbol) },
+    { label: "状态与身份", icon: "symbol-namespace", children: module.declarations.filter(item => !item.generated).map(item => ({ ...symbol(item), children: module.bindings.filter(binding => binding.targetLocation?.file === item.location.file && binding.targetLocation.line === item.location.line && binding.targetLocation.column === item.location.column).map(symbol) })) },
     { label: "行为与消息入口", icon: "symbol-method", children: module.bindings.filter(item => !item.generated).map(symbol) },
     { label: "导航提示", description: String(module.diagnostics.length), icon: "warning", children: module.diagnostics.map(item => ({ label: item.code, tooltip: item.message, icon: "warning", ...at(module, item.location) })) },
   ] };
