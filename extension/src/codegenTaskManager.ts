@@ -14,7 +14,6 @@ export class CodegenTaskManager implements vscode.Disposable {
     if (!vscode.workspace.isTrusted) throw new Error("请先信任当前工作区，才能运行 TiangZ 主工程任务");
     const key = taskKey(folder, generator.id);
     if (this.running.has(key)) throw new Error(`${generatorLabel(generator.id)} 正在运行，请等待当前任务结束`);
-    this.running.add(key);
 
     const task = new vscode.Task(
       { type: "tiangz-codegen", generator: generator.id },
@@ -32,9 +31,9 @@ export class CodegenTaskManager implements vscode.Disposable {
       focus: false,
     };
 
+    this.running.add(key);
     try {
-      const execution = await vscode.tasks.executeTask(task);
-      return await waitForExit(execution);
+      return await executeAndWaitForExit(task);
     } finally {
       this.running.delete(key);
     }
@@ -58,14 +57,30 @@ export function generatorLabel(id: string): string {
   }
 }
 
-function waitForExit(execution: vscode.TaskExecution): Promise<number> {
-  return new Promise((resolve) => {
-    const subscription = vscode.tasks.onDidEndTaskProcess((event) => {
-      if (event.execution !== execution) return;
-      subscription.dispose();
-      resolve(event.exitCode ?? -1);
-    });
-  });
+async function executeAndWaitForExit(task: vscode.Task): Promise<number> {
+  // 先监听后启动：极速结束及未创建 Process 的排队取消都必须释放调用者。 / Subscribe before launch, including queued cancellation.
+  let execution: vscode.TaskExecution | undefined;
+  const finished = new Map<vscode.TaskExecution, number>();
+  let resolveExit!: (code: number) => void;
+  const result = new Promise<number>((resolve) => { resolveExit = resolve; });
+  const remember = (ended: vscode.TaskExecution, code: number): void => {
+    if (execution && ended !== execution) return;
+    if (!finished.has(ended)) finished.set(ended, code);
+    if (ended === execution) resolveExit(finished.get(ended)!);
+  };
+  const processEnd = vscode.tasks.onDidEndTaskProcess((event) => remember(event.execution, event.exitCode ?? -1));
+  const taskEnd = vscode.tasks.onDidEndTask((event) => remember(event.execution, -1));
+  try {
+    execution = await vscode.tasks.executeTask(task);
+    const earlyCode = finished.get(execution);
+    finished.clear();
+    if (earlyCode !== undefined) resolveExit(earlyCode);
+    return await result;
+  } finally {
+    processEnd.dispose();
+    taskEnd.dispose();
+    finished.clear();
+  }
 }
 
 function taskKey(folder: vscode.WorkspaceFolder, generatorId: string): string {
