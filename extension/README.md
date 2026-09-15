@@ -6,6 +6,8 @@
 
 “启动模块开发模式”复用既有开发任务管理器，直接调用声明宿主的 `dev_runtime.mjs --project`，不复制 watcher。需提前编译匹配版本的宿主；停止命令或 Ctrl+C 先请求优雅停机，25 秒后才终止本任务进程树。异常退出保留失败状态；不自动附加调试器。教学 smoke 仍使用工程自己的终端命令。
 
+“新建模块 Component”复用宿主四文件预览与 planHash 检查，再创建 Model/Hotfix 配套文件和入口登记；不复制模板、不自动装配到 Scene/Entity。先停止开发模式，创建后检查、构建并重启。预览过期、已有文件或动态入口会由宿主拒绝。
+
 在可信工作区执行“TiangZ：读取模块结构”，即可从“TiangZ 模块”树查看入口、直接依赖、公开 API、状态类型与行为绑定，并跳转源码。独立工程请设置 `tiangzDeveloperTools.engineRoot` 指向 TiangZ 宿主，`tiangzDeveloperTools.modulesDirectory` 默认为 `modules`（均相对当前工作区）。宿主须提供 `tools/inspect_game_modules.mjs`。
 
 插件只呈现宿主通用工具的静态结果；不会运行游戏、Cargo、代码生成或自动修复。首次和源码变化后请显式刷新。未静态加载提示不等于运行错误，动态注册需另行验证；原工程树的运行命令仍服务于主工程，不自动套用到独立模块。

@@ -10,13 +10,13 @@ import { readFile } from "node:fs/promises";
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const bundled = await build({ entryPoints: [path.join(root, "extension/src/moduleProjectActions.ts")], bundle: true, write: false, platform: "node", format: "cjs", external: ["vscode"] });
 function harness() {
-  const state = { tasks: [], inputs: ["org.example.game", "../new game"], confirm: "创建", project: { engineRoot: "../engine with spaces" } };
+  const state = { tasks: [], inputs: ["org.example.game", "../new game"], confirm: "创建", project: { engineRoot: "../engine with spaces" }, calls: [], documents: [], hostError: undefined };
   const vscode = {
     Uri: { file: fsPath => ({ fsPath }), joinPath: (uri, file) => ({ fsPath: path.join(uri.fsPath, file) }) },
     workspace: { isTrusted: true, workspaceFolders: [{ name: "Game", uri: { fsPath: path.resolve("/game") } }],
       getConfiguration: () => ({ get: (_, fallback) => fallback }),
-      fs: { stat: async () => ({}), readFile: async () => new TextEncoder().encode(JSON.stringify(state.project)) } },
-    window: { showQuickPick: async items => items.find(item => item.action === "check"), showInputBox: async () => state.inputs.shift(), showInformationMessage: async () => state.confirm },
+      fs: { stat: async () => ({}), readFile: async () => new TextEncoder().encode(JSON.stringify(state.project)) }, openTextDocument: async spec => { state.documents.push(spec); return spec; } },
+    window: { showQuickPick: async items => items.find(item => item.action === "check") ?? items[0], showInputBox: async () => state.inputs.shift(), showInformationMessage: async () => state.confirm, showTextDocument: async () => {} },
     Task: class { constructor(definition, scope, name, source, execution, matchers) { Object.assign(this, { definition, scope, name, source, execution, matchers }); } },
     ProcessExecution: class { constructor(command, args, options) { Object.assign(this, { command, args, options }); } },
     TaskRevealKind: { Always: 1 }, TaskPanelKind: { Dedicated: 1 },
@@ -24,7 +24,14 @@ function harness() {
   };
   const require = createRequire(import.meta.url);
   const module = { exports: {} };
-  runInNewContext(bundled.outputFiles[0].text, { module, exports: module.exports, TextDecoder, require: name => name === "vscode" ? vscode : require(name) });
+  const execFile = (command, args, options, callback) => {
+    state.calls.push({ command, args: [...args], options });
+    const value = state.hostError ? { formatVersion: 1, error: { message: state.hostError } } : path.basename(args[0]) === "game_project.mjs"
+      ? { formatVersion: 1, modules: [{ id: "org.example.game" }] }
+      : { formatVersion: 1, dryRun: true, planHash: "a".repeat(64), changes: [{ file: "modules/starter/src/model/index.ts", operation: "update", content: "// host-owned preview" }] };
+    callback(state.hostError ? new Error(state.hostError) : null, JSON.stringify(value), "");
+  };
+  runInNewContext(bundled.outputFiles[0].text, { module, exports: module.exports, TextDecoder, require: name => name === "vscode" ? vscode : name === "node:child_process" ? { execFile } : require(name) });
   return { state, vscode, ...module.exports };
 }
 test("module action uses declared host and argument-array task, not copied build rules", async () => {
@@ -84,4 +91,26 @@ test("module dev selects the declared host and reuses the existing lifecycle own
   vscode.workspace.isTrusted = false;
   await assert.rejects(startModuleDevelopment(manager), /信任工作区/);
   assert.equal(launches.length, 1);
+});
+test("component wizard shows host preview and pins the approved source fingerprint", async () => {
+  const { state, createModuleComponent } = harness();
+  state.inputs = ["Inventory", "inventory"];
+  state.confirm = "创建组件";
+  await createModuleComponent();
+  assert.equal(state.calls.length, 2);
+  assert.ok(state.calls[1].args.includes("--dry-run"));
+  assert.match(state.documents[0].content, /host-owned preview/);
+  assert.equal(state.tasks[0].definition.operation, "new-component");
+  assert.deepEqual([...state.tasks[0].execution.args.slice(-2)], ["--expect-plan", "a".repeat(64)]);
+  assert.equal(state.tasks[0].execution.options.cwd, path.resolve("/engine with spaces"));
+});
+test("component preview errors and declined confirmation never launch a write task", async () => {
+  const { state, createModuleComponent } = harness();
+  state.inputs = ["Inventory", "inventory"];
+  state.confirm = undefined;
+  await createModuleComponent();
+  assert.equal(state.tasks.length, 0);
+  state.hostError = "动态入口请手工登记";
+  await assert.rejects(createModuleComponent(), /动态入口/);
+  assert.equal(state.tasks.length, 0);
 });

@@ -1,4 +1,5 @@
 import path from "node:path";
+import { execFile } from "node:child_process";
 import * as vscode from "vscode";
 import type { DevSourceManager } from "./devSourceManager.js";
 
@@ -21,6 +22,56 @@ export async function startModuleDevelopment(manager: DevSourceManager): Promise
   const engine = path.resolve(folder.uri.fsPath, project.engineRoot);
   await vscode.workspace.fs.stat(vscode.Uri.file(path.join(engine, "tools/dev_runtime.mjs")));
   await manager.start({ folder, configRelativePath: "tiangz.project.json", machineName: folder.name, moduleEngineRoot: engine });
+}
+
+/** Ask the host for a concrete preview; do not copy source templates or AST rewriting into the extension. */
+export async function createModuleComponent(): Promise<void> {
+  trusted();
+  const folder = await selectFolder("选择要新增组件的独立模块工程");
+  if (!folder) return;
+  const bytes = await vscode.workspace.fs.readFile(vscode.Uri.joinPath(folder.uri, "tiangz.project.json"));
+  const project: unknown = JSON.parse(new TextDecoder().decode(bytes));
+  if (!project || typeof project !== "object" || !("engineRoot" in project) || typeof project.engineRoot !== "string" || !project.engineRoot.trim()) throw new Error("tiangz.project.json 缺少 engineRoot；不会回退到主工程组件生成器。");
+  const engine = path.resolve(folder.uri.fsPath, project.engineRoot);
+  const script = path.join(engine, "tools/create_module_component.mjs");
+  await vscode.workspace.fs.stat(vscode.Uri.file(script));
+  const catalog = await hostJson(engine, "game_project.mjs", ["inspect", "--project", folder.uri.fsPath, "--json"]);
+  if (!catalog || catalog.formatVersion !== 1 || !Array.isArray(catalog.modules)) throw new Error("宿主返回了不支持的模块列表格式");
+  const options: { label: string }[] = catalog.modules.map((module: { id?: unknown }) => {
+    if (typeof module.id !== "string") throw new Error("宿主模块 ID 格式无效");
+    return { label: module.id };
+  });
+  const module = await vscode.window.showQuickPick(options, { title: "选择组件所属模块", ignoreFocusOut: true });
+  if (!module) return;
+  const name = await vscode.window.showInputBox({ title: "组件名称", prompt: "例如 Inventory；宿主生成 InventoryComponent 和对应 System", ignoreFocusOut: true });
+  if (name === undefined) return;
+  const feature = await vscode.window.showInputBox({ title: "功能目录", prompt: "例如 inventory；Model/Hotfix 使用相同功能目录", ignoreFocusOut: true });
+  if (feature === undefined) return;
+  const args = ["--project", folder.uri.fsPath, "--module", module.label, "--name", name.trim(), "--feature", feature.trim()];
+  const preview = await hostJson(engine, "create_module_component.mjs", [...args, "--dry-run", "--json"]);
+  if (!preview || preview.formatVersion !== 1 || preview.dryRun !== true || !Array.isArray(preview.changes) || !preview.changes.length) throw new Error("宿主没有返回有效的只读生成预览");
+  if (typeof preview.planHash !== "string" || !/^[a-f0-9]{64}$/.test(preview.planHash)) throw new Error("宿主没有返回可校验的生成计划指纹");
+  const sections = preview.changes.map((change: { file?: unknown; content?: unknown; operation?: unknown }) => {
+    if (typeof change.file !== "string" || typeof change.content !== "string" || !["create", "update"].includes(String(change.operation))) throw new Error("宿主生成预览内容不完整");
+    return `--- ${change.operation}: ${change.file} ---\n${change.content}`;
+  });
+  const document = await vscode.workspace.openTextDocument({ language: "plaintext", content: `TiangZ 模块组件预览（尚未写入）\n未自动装配到 Scene/Entity，也未启动服务。\n\n${sections.join("\n\n")}` });
+  await vscode.window.showTextDocument(document, { preview: true });
+  const confirmed = await vscode.window.showInformationMessage("确认按宿主规则创建模块组件并更新 Model/Hotfix 入口？已有文件不会覆盖；动态入口需手工修改。请先停止本工程开发模式。", { modal: true }, "创建组件");
+  if (confirmed !== "创建组件") return;
+  await launchTask(folder, "创建模块组件", script, [...args, "--expect-plan", preview.planHash], engine);
+}
+
+function hostJson(engine: string, script: string, args: string[]): Promise<Record<string, unknown>> {
+  return new Promise((resolve, reject) => {
+    execFile("node", [path.join(engine, "tools", script), ...args], { cwd: engine, windowsHide: true, timeout: 30_000, maxBuffer: 8 * 1024 * 1024 }, (error, stdout, stderr) => {
+      let value;
+      try { value = JSON.parse(stdout); } catch { reject(new Error(stderr.trim() || error?.message || "宿主没有输出有效 JSON")); return; }
+      if (error || value?.error) reject(new Error(value?.error?.message || stderr.trim() || error?.message || "宿主工具失败"));
+      else if (value && typeof value === "object" && !Array.isArray(value)) resolve(value);
+      else reject(new Error("宿主 JSON 结果不是对象"));
+    });
+  });
 }
 
 /** UI chooses an action; the host owns its implementation and compatibility checks. */
@@ -70,7 +121,8 @@ export async function createModuleProject(): Promise<void> {
 }
 
 async function launchTask(folder: vscode.WorkspaceFolder, label: string, script: string, args: string[], cwd: string): Promise<void> {
-  const task = new vscode.Task({ type: "tiangz-module-project", operation: path.basename(script) === "create_game_project.mjs" ? "create" : args[0] }, folder, label, "TiangZ", new vscode.ProcessExecution("node", [script, ...args], { cwd }), ["$tsc", "$tiangz-module"]);
+  const operation = path.basename(script) === "create_game_project.mjs" ? "create" : path.basename(script) === "create_module_component.mjs" ? "new-component" : args[0];
+  const task = new vscode.Task({ type: "tiangz-module-project", operation }, folder, label, "TiangZ", new vscode.ProcessExecution("node", [script, ...args], { cwd }), ["$tsc", "$tiangz-module"]);
   task.presentationOptions = { reveal: vscode.TaskRevealKind.Always, panel: vscode.TaskPanelKind.Dedicated, clear: true, showReuseMessage: false };
   await vscode.tasks.executeTask(task);
 }
