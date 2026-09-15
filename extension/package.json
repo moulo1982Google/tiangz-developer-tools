@@ -144,6 +144,7 @@
     "commands": [
       { "command": "tiangzDeveloperTools.createModuleProject", "title": "TiangZ：创建模块入门工程", "icon": "$(new-folder)" },
       { "command": "tiangzDeveloperTools.moduleProjectAction", "title": "TiangZ：模块工程操作", "icon": "$(tools)" },
+      { "command": "tiangzDeveloperTools.startModuleDevelopment", "title": "TiangZ：启动模块开发模式", "icon": "$(play)" },
       {
         "command": "tiangzDeveloperTools.inspectModules",
         "title": "TiangZ：读取模块结构",
@@ -288,6 +289,8 @@
       "view/title": [
         { "command": "tiangzDeveloperTools.createModuleProject", "when": "view == tiangzModules", "group": "navigation@2" },
         { "command": "tiangzDeveloperTools.moduleProjectAction", "when": "view == tiangzModules", "group": "navigation@3" },
+        { "command": "tiangzDeveloperTools.startModuleDevelopment", "when": "view == tiangzModules", "group": "navigation@4" },
+        { "command": "tiangzDeveloperTools.stopDevSourceMode", "when": "view == tiangzModules", "group": "navigation@5" },
         {
           "command": "tiangzDeveloperTools.inspectModules",
           "when": "view == tiangzModules",

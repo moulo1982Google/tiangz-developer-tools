@@ -73,3 +73,15 @@ test("untrusted and invalid project actions do not start a task", async () => {
   await assert.rejects(runModuleProjectAction(), /不会回退/);
   assert.equal(state.tasks.length, 0);
 });
+test("module dev selects the declared host and reuses the existing lifecycle owner", async () => {
+  const { state, vscode, startModuleDevelopment } = harness();
+  const launches = [];
+  const manager = { start: async spec => launches.push(spec) };
+  await startModuleDevelopment(manager);
+  assert.equal(launches[0].moduleEngineRoot, path.resolve("/engine with spaces"));
+  assert.equal(launches[0].configRelativePath, "tiangz.project.json");
+  assert.equal(state.tasks.length, 0);
+  vscode.workspace.isTrusted = false;
+  await assert.rejects(startModuleDevelopment(manager), /信任工作区/);
+  assert.equal(launches.length, 1);
+});

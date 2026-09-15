@@ -1,5 +1,6 @@
 import path from "node:path";
 import * as vscode from "vscode";
+import type { DevSourceManager } from "./devSourceManager.js";
 
 const actions = [
   { label: "检查基础环境", action: "doctor", description: "只读：宿主路径、依赖和二进制版本" },
@@ -8,6 +9,19 @@ const actions = [
   { label: "构建 TS 模块", action: "build", description: "生成 Model/Hotfix 与配置，不运行 Cargo" },
   { label: "编译宿主", action: "host-build", description: "首次或 Rust/宿主变化时执行，可能耗时较长" },
 ] as const;
+
+/** Reuse the existing task owner; the host remains responsible for build, watch, reload and locking. */
+export async function startModuleDevelopment(manager: DevSourceManager): Promise<void> {
+  trusted();
+  const folder = await selectFolder("选择要启动开发模式的独立模块工程");
+  if (!folder) return;
+  const bytes = await vscode.workspace.fs.readFile(vscode.Uri.joinPath(folder.uri, "tiangz.project.json"));
+  const project: unknown = JSON.parse(new TextDecoder().decode(bytes));
+  if (!project || typeof project !== "object" || !("engineRoot" in project) || typeof project.engineRoot !== "string" || !project.engineRoot.trim()) throw new Error("tiangz.project.json 缺少 engineRoot；不会回退到主工程开发模式。");
+  const engine = path.resolve(folder.uri.fsPath, project.engineRoot);
+  await vscode.workspace.fs.stat(vscode.Uri.file(path.join(engine, "tools/dev_runtime.mjs")));
+  await manager.start({ folder, configRelativePath: "tiangz.project.json", machineName: folder.name, moduleEngineRoot: engine });
+}
 
 /** UI chooses an action; the host owns its implementation and compatibility checks. */
 export async function runModuleProjectAction(): Promise<void> {

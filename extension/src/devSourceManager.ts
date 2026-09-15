@@ -1,4 +1,5 @@
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
+import path from "node:path";
 
 import * as vscode from "vscode";
 
@@ -6,6 +7,7 @@ interface DevSourceLaunchSpec {
   readonly folder: vscode.WorkspaceFolder;
   readonly configRelativePath: string;
   readonly machineName: string;
+  readonly moduleEngineRoot?: string;
 }
 
 /** 管理唯一的源码开发任务，并确保停止操作先进入Watcher优雅停机协议。 / Manages the single source-development task and ensures stop first enters the Watcher graceful-shutdown protocol. */
@@ -24,7 +26,7 @@ export class DevSourceManager implements vscode.Disposable {
       `源码开发模式 (${spec.machineName})`,
       "TiangZ",
       new vscode.CustomExecution(async () => terminal),
-      [],
+      ["$tsc", "$tiangz-module"],
     );
     task.presentationOptions = {
       reveal: vscode.TaskRevealKind.Always,
@@ -68,17 +70,24 @@ class DevSourceTerminal implements vscode.Pseudoterminal {
   ) {}
 
   public open(): void {
+    if (this.finished || this.stopping) return;
     this.written.fire(`TiangZ 源码开发模式：${this.spec.machineName}\r\n`);
     this.written.fire(`Config: ${this.spec.configRelativePath}\r\n\r\n`);
-    this.child = spawn("npm", ["run", "dev", "--", this.spec.configRelativePath], {
-      cwd: this.spec.folder.uri.fsPath,
+    const engine = this.spec.moduleEngineRoot;
+    this.child = spawn(engine ? "node" : "npm", engine
+      ? [path.join(engine, "tools/dev_runtime.mjs"), "--project", this.spec.folder.uri.fsPath]
+      : ["run", "dev", "--", this.spec.configRelativePath], {
+      cwd: engine ?? this.spec.folder.uri.fsPath,
       env: process.env,
-      shell: process.platform === "win32",
+      shell: !engine && process.platform === "win32",
       windowsHide: true,
       detached: process.platform !== "win32",
     });
     this.child.stdout.on("data", (chunk: Buffer) => this.writeChunk(chunk));
     this.child.stderr.on("data", (chunk: Buffer) => this.writeChunk(chunk));
+    this.child.stdin.on("error", (error) => {
+      if (!this.finished && !this.stopping) this.written.fire(`[TiangZ] 控制通道已关闭：${error.message}\r\n`);
+    });
     this.child.once("error", (error) => {
       this.written.fire(`启动源码开发模式失败：${error.message}\r\n`);
       this.finish(-1);
@@ -88,6 +97,7 @@ class DevSourceTerminal implements vscode.Pseudoterminal {
 
   /** 将任务终端输入交给开发宿主，因此仍可手工执行Watcher的reload或shutdown命令。 / Forwards task-terminal input to the development host so manual Watcher reload or shutdown commands remain available. */
   public handleInput(data: string): void {
+    if (data.includes("\u0003")) { this.stop(); return; }
     if (!this.stopping && this.child?.stdin.writable) this.child.stdin.write(data);
   }
 
@@ -95,7 +105,7 @@ class DevSourceTerminal implements vscode.Pseudoterminal {
     this.stop();
   }
 
-  /** 先写入shutdown并等待15秒，只有宿主失去响应时才终止进程树。 / Writes shutdown and waits 15 seconds before terminating the process tree only if the host stops responding. */
+  /** 先写入shutdown并等待宿主清理，超时后才终止本任务进程树。 / Allows host cleanup before terminating this task's process tree on timeout. */
   public stop(): void {
     if (this.finished || this.stopping) return;
     this.stopping = true;
@@ -106,7 +116,10 @@ class DevSourceTerminal implements vscode.Pseudoterminal {
       return;
     }
     if (child.stdin.writable) child.stdin.write("shutdown\n");
-    this.stopTimer = setTimeout(() => terminateProcessTree(child), 15_000);
+    this.stopTimer = setTimeout(() => {
+      this.written.fire("[TiangZ] 优雅停机超时，正在终止本任务进程树。\r\n");
+      terminateProcessTree(child);
+    }, 25_000);
   }
 
   private writeChunk(chunk: Buffer): void {
@@ -119,7 +132,7 @@ class DevSourceTerminal implements vscode.Pseudoterminal {
     if (this.stopTimer) clearTimeout(this.stopTimer);
     this.onFinished();
     this.written.fire(`\r\n[TiangZ] 源码开发模式已退出，exitCode=${exitCode}\r\n`);
-    this.closed.fire(this.stopping && exitCode !== 0 ? 0 : exitCode);
+    this.closed.fire(exitCode);
     this.written.dispose();
     this.closed.dispose();
   }

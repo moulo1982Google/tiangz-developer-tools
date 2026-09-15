@@ -2,7 +2,9 @@
 
 ## 独立模块导航
 
-新工程若包含 `tiangz.project.json`，导航自动调用其中宿主，不需要重复配置 engineRoot。“创建模块入门工程”向导复用宿主生成器；“模块工程操作”提供 doctor/setup/check/build/host-build 任务，完整规则由宿主维护。生成前展示目标位置和初始协议锁/SDK 写入范围；任务开始不等于验收通过，结果见终端。运行与 smoke 目前使用新工程自己的终端命令。
+新工程若包含 `tiangz.project.json`，导航自动调用其中宿主，不需要重复配置 engineRoot。“创建模块入门工程”向导复用宿主生成器；“模块工程操作”提供 doctor/setup/check/build/host-build 任务，完整规则由宿主维护。生成前展示目标位置和初始协议锁/SDK 写入范围；任务开始不等于验收通过，结果见终端及 Problems 面板。
+
+“启动模块开发模式”复用既有开发任务管理器，直接调用声明宿主的 `dev_runtime.mjs --project`，不复制 watcher。需提前编译匹配版本的宿主；停止命令或 Ctrl+C 先请求优雅停机，25 秒后才终止本任务进程树。异常退出保留失败状态；不自动附加调试器。教学 smoke 仍使用工程自己的终端命令。
 
 在可信工作区执行“TiangZ：读取模块结构”，即可从“TiangZ 模块”树查看入口、直接依赖、公开 API、状态类型与行为绑定，并跳转源码。独立工程请设置 `tiangzDeveloperTools.engineRoot` 指向 TiangZ 宿主，`tiangzDeveloperTools.modulesDirectory` 默认为 `modules`（均相对当前工作区）。宿主须提供 `tools/inspect_game_modules.mjs`。
 
