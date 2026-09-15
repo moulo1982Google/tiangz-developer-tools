@@ -33,6 +33,10 @@ export async function createComponentScaffold(
   options: NewComponentOptions,
 ): Promise<NewComponentResult> {
   const projectRoot = path.resolve(options.projectRoot);
+  let moduleProject = false;
+  try { await stat(path.join(projectRoot, "tiangz.project.json")); moduleProject = true; }
+  catch (error) { if (!(error && typeof error === "object" && "code" in error && error.code === "ENOENT")) throw error; }
+  if (moduleProject) throw new Error("这是独立模块工程，请使用宿主 module:new-component 或“新建模块 Component”，不生成 app/model/public.ts 三件套。");
   const baseName = normalizeTypeName(options.name);
   const domain = normalizeDomain(options.domain);
   const componentName = `${baseName}Component`;

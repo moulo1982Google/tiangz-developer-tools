@@ -1,4 +1,5 @@
 import * as vscode from "vscode";
+import { requireMainProject } from "./mainProjectGuard.js";
 
 import type { CodegenGeneratorModel } from "../../packages/project-core/src/types.js";
 
@@ -8,6 +9,9 @@ export class CodegenTaskManager implements vscode.Disposable {
 
   async run(folder: vscode.WorkspaceFolder, generator: CodegenGeneratorModel): Promise<number> {
     if (this.disposed) throw new Error("代码生成任务管理器已经释放");
+    await requireMainProject(folder);
+    if (this.disposed) throw new Error("代码生成任务管理器已经释放");
+    if (!vscode.workspace.isTrusted) throw new Error("请先信任当前工作区，才能运行 TiangZ 主工程任务");
     const key = taskKey(folder, generator.id);
     if (this.running.has(key)) throw new Error(`${generatorLabel(generator.id)} 正在运行，请等待当前任务结束`);
     this.running.add(key);

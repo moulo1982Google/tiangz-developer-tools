@@ -1,4 +1,5 @@
 import * as vscode from "vscode";
+import { requireMainProject } from "./mainProjectGuard.js";
 
 import { createComponentScaffold } from "../../packages/project-cli/src/scaffold.js";
 
@@ -15,6 +16,7 @@ export async function createComponentFromWorkspace(
   if (!vscode.workspace.isTrusted) throw new Error("请先信任当前工作区，才能生成 TiangZ 源码");
   const folder = await selectWorkspaceFolder(target);
   if (!folder) return;
+  await requireMainProject(folder);
 
   const name = await vscode.window.showInputBox({
     title: "TiangZ：新建 Component",
@@ -38,6 +40,7 @@ export async function createComponentFromWorkspace(
   });
   if (domain === undefined) return;
 
+  if (!vscode.workspace.isTrusted) throw new Error("工作区信任已撤销，不生成 TiangZ 源码");
   const result = await createComponentScaffold({
     projectRoot: folder.uri.fsPath,
     name,

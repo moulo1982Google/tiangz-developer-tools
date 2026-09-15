@@ -64,6 +64,14 @@ test("returns 2 for a missing project directory", () => {
   assert.match(result.stderr, /检查器错误/);
 });
 
+test("legacy scaffold refuses a module descriptor before asking for app/model/public.ts", async (context) => {
+  const root = await fixture(context);
+  await write(root, "tiangz.project.json", "{}");
+  const result = runScaffold("Inventory", "--domain", "mmorpg", "--project", root);
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /独立模块工程.*module:new-component/);
+});
+
 test("generates the Model, domain facade and Hotfix System", async (context) => {
   const root = await fixture(context);
   await write(root, "app/model/public.ts", "export * from \"../core/public\";\n");
