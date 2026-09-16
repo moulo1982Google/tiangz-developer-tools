@@ -537,6 +537,9 @@ function validateLifecycleContracts(
 ): void {
   for (const model of models) {
     const matches = systems.filter((system) => system.target === model.name);
+    // 通用契约由安装的模块提供实现；宿主未装配它时不要求游戏 System。
+    // Shared contracts require Systems only when a module assembles their implementation.
+    if (matches.length === 0 && normalizePath(model.location.relativePath).startsWith("app/model/domains/")) continue;
     const system = matches.length === 1 ? matches[0] : undefined;
     if (model.requiredMethods.length > 0 && !system) {
       diagnostics.push({

@@ -43,3 +43,9 @@
 - 使用“TiangZ：运行 Runtime Foundation 自测”调用主工程统一自测入口。
 
 详细说明、CLI、MCP 接入方式与路线图位于项目仓库根目录。
+
+## Rust 扩展模板
+
+“新建模块入门工程”可选择 **TypeScript + Rust 扩展**。插件将 `--with-rust` 传给 TiangZ 宿主脚手架；需要支持该选项的宿主及 Cargo/rustfmt。生成独立 Rust crate、Native 接口、TS 调用示例和 RUST.md，不启动服务、不自动编译 Rust。
+
+在生成工程执行 `npm run setup`、`npm run host-build`、`npm run build`、`npm run smoke`。Rust 修改需要重新编译重启；当前自动 dev 入口不支持 Native 工程。默认 TypeScript 模板不变。

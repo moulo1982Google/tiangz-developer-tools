@@ -125,13 +125,18 @@ export async function createModuleProject(): Promise<void> {
   const id = await vscode.window.showInputBox({ title: "新建 TiangZ 入门工程", prompt: "模块 ID，例如 org.example.game", value: "org.example.game", ignoreFocusOut: true,
     validateInput: value => value.trim() ? undefined : "请输入模块 ID；格式由宿主工具最终校验" });
   if (id === undefined) return;
+  const template = await vscode.window.showQuickPick([
+    { label: "TypeScript", description: "标准模块入门工程", withRust: false },
+    { label: "TypeScript + Rust 扩展", description: "生成 Rust 壳与调用示例；需要 Cargo，修改 Rust 后重新编译重启", withRust: true },
+  ], { title: "选择模块模板", ignoreFocusOut: true });
+  if (!template) return;
   const target = await vscode.window.showInputBox({ title: "新工程目录", prompt: "输入尚不存在的目录；相对当前工作区解析，宿主拒绝覆盖已有目录", value: "../MyGame", ignoreFocusOut: true,
     validateInput: value => value.trim() ? undefined : "请输入新目录" });
   if (target === undefined) return;
   const destination = path.resolve(folder.uri.fsPath, target.trim());
-  const confirmed = await vscode.window.showInformationMessage(`宿主：${engine}\n将创建计数器教学工程：${destination}。生成模块源码、初始协议锁和 TypeScript SDK，不启动游戏。`, { modal: true }, "创建");
+  const confirmed = await vscode.window.showInformationMessage(`宿主：${engine}\n将创建 ${template.label} 计数器教学工程：${destination}。生成模块源码、初始协议锁和 TypeScript SDK${template.withRust ? "，以及 Rust crate 与 Native 桥（不自动编译 Rust）" : ""}，不启动游戏。`, { modal: true }, "创建");
   if (confirmed !== "创建") return;
-  await launchTask(folder, "创建模块入门工程", script, ["--path", destination, "--id", id.trim()], engine);
+  await launchTask(folder, "创建模块入门工程", script, ["--path", destination, "--id", id.trim(), ...(template.withRust ? ["--with-rust"] : [])], engine);
 }
 
 async function launchTask(folder: vscode.WorkspaceFolder, label: string, script: string, args: string[], cwd: string): Promise<void> {

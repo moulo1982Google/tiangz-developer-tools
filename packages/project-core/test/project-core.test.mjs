@@ -832,6 +832,14 @@ class ForgottenPlayerUnit extends ActorUnit {}`,
   );
 });
 
+test("unassembled shared contracts need no game System, but assembled and local contracts remain checked", () => {
+  const contract = { relativePath: "app/model/domains/buff/Buff.ts", text: "@lifecycle({ awake: true }) export class Buff {}" };
+  const errors = sources => analyzeTiangZProject(sources).diagnostics.filter(d => d.code.startsWith("tiangz.lifecycle."));
+  assert.deepEqual(errors([contract]), []);
+  assert.equal(errors([{ ...contract, relativePath: "app/model/game/Buff.ts" }])[0].code, "tiangz.lifecycle.missing-system");
+  assert.equal(errors([contract, { relativePath: "app/hotfix/game/BuffSystem.ts", text: "@systemFor(Buff) export class BuffSystem extends Buff {}" }])[0].code, "tiangz.lifecycle.missing-method");
+});
+
 test("validates declared Model lifecycle and transfer methods against Hotfix Systems", () => {
   const incomplete = analyzeTiangZProject([
     {

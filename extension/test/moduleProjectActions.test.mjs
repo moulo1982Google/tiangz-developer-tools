@@ -83,6 +83,17 @@ test("creation previews destination and delegates initial generation only after 
   assert.equal(state.tasks[0].execution.args[2], path.resolve("/new game"));
 });
 
+test("Rust template delegates the flag to the host and cancellation creates nothing", async () => {
+  const h = harness();
+  h.vscode.window.showQuickPick = async items => items.find(item => item.withRust);
+  await h.createModuleProject();
+  assert.ok(h.state.tasks[0].execution.args.includes("--with-rust"));
+  const canceled = harness();
+  canceled.vscode.window.showQuickPick = async () => undefined;
+  await canceled.createModuleProject();
+  assert.equal(canceled.state.tasks.length, 0);
+});
+
 test("creation from an umbrella folder discovers the host and preserves destination relative to opened folder", async () => {
   const h = harness();
   const opened = h.vscode.workspace.workspaceFolders[0];
