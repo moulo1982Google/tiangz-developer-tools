@@ -79,6 +79,15 @@ connection.onNotification(INDEX_FILES_NOTIFICATION, (value: unknown) => {
       ? value.roots
       : [];
   const groups = candidates.filter(isIndexedRootFiles);
+  rootUris = [...new Set(groups.map(group => group.rootUri))];
+  for (const root of snapshots.keys()) if (!rootUris.includes(root)) snapshots.delete(root);
+  for (const [uri, source] of sources) {
+    if (!rootUris.includes(source.rootUri)) {
+      sources.delete(uri);
+      connection.sendDiagnostics({ uri, diagnostics: [] });
+    }
+  }
+  for (const document of documents.all()) updateOpenDocument(document);
   indexedUris.clear();
   for (const group of groups) {
     for (const uri of group.uris) indexedUris.add(uri);
@@ -265,6 +274,7 @@ async function loadFiles(groups: readonly IndexedRootFiles[]): Promise<void> {
       if (documents.get(item.uri)) continue;
       try {
         const text = await readFile(fileURLToPath(item.uri), "utf8");
+        if (!rootUris.includes(item.rootUri) || !indexedUris.has(item.uri) || documents.get(item.uri)) continue;
         sources.set(item.uri, {
           uri: item.uri,
           rootUri: item.rootUri,

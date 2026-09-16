@@ -1,5 +1,6 @@
 import * as vscode from "vscode";
 import { requireMainProject } from "./mainProjectGuard.js";
+import { projectTaskScope } from "./projectRoots.js";
 
 import type { CodegenGeneratorModel } from "../../packages/project-core/src/types.js";
 
@@ -17,7 +18,7 @@ export class CodegenTaskManager implements vscode.Disposable {
 
     const task = new vscode.Task(
       { type: "tiangz-codegen", generator: generator.id },
-      folder,
+      projectTaskScope(folder),
       generator.id === "runtime-foundation" ? generatorLabel(generator.id) : `生成 ${generatorLabel(generator.id)}`,
       generator.id === "runtime-foundation" ? "TiangZ Test" : "TiangZ Codegen",
       new vscode.ShellExecution(generator.command, { cwd: folder.uri.fsPath }),

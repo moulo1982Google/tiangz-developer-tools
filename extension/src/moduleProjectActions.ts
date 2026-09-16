@@ -2,6 +2,7 @@ import path from "node:path";
 import { execFile } from "node:child_process";
 import * as vscode from "vscode";
 import type { DevSourceManager } from "./devSourceManager.js";
+import { discoverProjectRoots, hasProjectFile, projectTaskScope } from "./projectRoots.js";
 
 const actions = [
   { label: "检查基础环境", action: "doctor", description: "只读：宿主路径、依赖和二进制版本" },
@@ -106,9 +107,21 @@ export async function createModuleProject(): Promise<void> {
     if (!project || typeof project !== "object" || !("engineRoot" in project) || typeof project.engineRoot !== "string" || !project.engineRoot.trim()) throw new Error("tiangz.project.json 缺少 engineRoot；不会回退其他宿主。");
     engine = path.resolve(folder.uri.fsPath, project.engineRoot);
   }
-  const script = path.join(engine, "tools/create_game_project.mjs");
+  let script = path.join(engine, "tools/create_game_project.mjs");
   try { await vscode.workspace.fs.stat(vscode.Uri.file(script)); }
-  catch { throw new Error("当前宿主没有 project:create；请设置 engineRoot 指向支持入门工程的 TiangZ 主工程。"); }
+  catch (error) {
+    if (!(error && typeof error === "object" && "code" in error && error.code === "FileNotFound")) throw error;
+    if (projectBytes || configuration.get<string>("engineRoot", ".") !== ".") throw new Error("指定宿主没有 project:create；请修正 engineRoot，不自动改用其他宿主。");
+    const candidates = [];
+    for (const candidate of await discoverProjectRoots(folder)) {
+      if (await hasProjectFile(vscode.Uri.joinPath(candidate.uri, "tools/create_game_project.mjs"))) candidates.push(candidate);
+    }
+    if (!candidates.length) throw new Error("当前目录及直属子目录未找到支持 project:create 的 TiangZ 主工程；请设置 engineRoot。");
+    const selected = candidates.length === 1 ? candidates[0] : (await vscode.window.showQuickPick(candidates.map(candidate => ({ label: candidate.name, description: candidate.uri.fsPath, candidate })), { title: "选择创建工程使用的 TiangZ 宿主" }))?.candidate;
+    if (!selected) return;
+    engine = selected.uri.fsPath;
+    script = path.join(engine, "tools/create_game_project.mjs");
+  }
   const id = await vscode.window.showInputBox({ title: "新建 TiangZ 入门工程", prompt: "模块 ID，例如 org.example.game", value: "org.example.game", ignoreFocusOut: true,
     validateInput: value => value.trim() ? undefined : "请输入模块 ID；格式由宿主工具最终校验" });
   if (id === undefined) return;
@@ -116,7 +129,7 @@ export async function createModuleProject(): Promise<void> {
     validateInput: value => value.trim() ? undefined : "请输入新目录" });
   if (target === undefined) return;
   const destination = path.resolve(folder.uri.fsPath, target.trim());
-  const confirmed = await vscode.window.showInformationMessage(`将创建计数器教学工程：${destination}。生成模块源码、初始协议锁和 TypeScript SDK，不启动游戏。`, { modal: true }, "创建");
+  const confirmed = await vscode.window.showInformationMessage(`宿主：${engine}\n将创建计数器教学工程：${destination}。生成模块源码、初始协议锁和 TypeScript SDK，不启动游戏。`, { modal: true }, "创建");
   if (confirmed !== "创建") return;
   await launchTask(folder, "创建模块入门工程", script, ["--path", destination, "--id", id.trim()], engine);
 }
@@ -124,7 +137,7 @@ export async function createModuleProject(): Promise<void> {
 async function launchTask(folder: vscode.WorkspaceFolder, label: string, script: string, args: string[], cwd: string): Promise<void> {
   trusted();
   const operation = path.basename(script) === "create_game_project.mjs" ? "create" : path.basename(script) === "create_module_component.mjs" ? "new-component" : args[0];
-  const task = new vscode.Task({ type: "tiangz-module-project", operation }, folder, label, "TiangZ", new vscode.ProcessExecution("node", [script, ...args], { cwd }), ["$tsc", "$tiangz-module"]);
+  const task = new vscode.Task({ type: "tiangz-module-project", operation }, projectTaskScope(folder), label, "TiangZ", new vscode.ProcessExecution("node", [script, ...args], { cwd }), ["$tsc", "$tiangz-module"]);
   task.presentationOptions = { reveal: vscode.TaskRevealKind.Always, panel: vscode.TaskPanelKind.Dedicated, clear: true, showReuseMessage: false };
   await vscode.tasks.executeTask(task);
 }

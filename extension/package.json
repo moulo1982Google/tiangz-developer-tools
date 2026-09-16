@@ -20,6 +20,7 @@
     }
   },
   "activationEvents": [
+    "workspaceContains:**/app/core/public.ts",
     "workspaceContains:tiangz.project.json",
     "workspaceContains:**/tiangz.module.json",
     "workspaceContains:configs",

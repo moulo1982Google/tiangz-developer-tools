@@ -25,6 +25,7 @@ import {
   type IndexedProject,
 } from "./projectIndex.js";
 import { ProjectTreeProvider, type ProjectNode } from "./projectTree.js";
+import { discoverProjectFolders } from "./projectRoots.js";
 import { TiangZProcessManager } from "./processManager.js";
 import { openRuntimeMetrics } from "./runtimeInspector.js";
 import { ModuleExplorer, openModuleLocation } from "./moduleExplorer.js";
@@ -82,7 +83,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   const designAssistantSubscriptions = registerDesignAssistant(context);
 
   const refresh = async (): Promise<void> => {
-    const folders = vscode.workspace.workspaceFolders ?? [];
+    const folders = await discoverProjectFolders(vscode.workspace.workspaceFolders ?? []);
     discoveries = await Promise.all(folders.map(discoverWorkspaceFolder));
     const activeRoots = new Set(discoveries.map((project) => project.folder.uri.toString()));
     projects = projects.filter((project) => activeRoots.has(project.folder.uri.toString()));
@@ -107,7 +108,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.workspace.createFileSystemWatcher("**/app/**/*.ts"),
     vscode.workspace.createFileSystemWatcher("**/codegen.manifest.json"),
     vscode.workspace.createFileSystemWatcher("**/codegen.config.json"),
-    vscode.workspace.createFileSystemWatcher("package.json"),
+    vscode.workspace.createFileSystemWatcher("**/package.json"),
     vscode.workspace.createFileSystemWatcher("**/proto/**/*.proto"),
     vscode.workspace.createFileSystemWatcher("**/native_data/**/*.native"),
     vscode.workspace.createFileSystemWatcher("**/tools/codegen_*.mjs"),
@@ -345,8 +346,7 @@ async function selectGenerator(
     project = projects.find((candidate) => candidate.folder.uri.toString() === target.rootUri);
     if (project && !generatorId && target.generator) return { project, generator: target.generator };
   } else if (target && isUri(target)) {
-    const folder = vscode.workspace.getWorkspaceFolder(target);
-    project = folder && projects.find((candidate) => candidate.folder.uri.toString() === folder.uri.toString());
+    project = locateConfig(target, projects)?.project;
   }
   if (!project) {
     if (projects.length === 1) project = projects[0];
@@ -592,11 +592,12 @@ function locateConfig(
   uri: vscode.Uri,
   projects: readonly IndexedProject[],
 ): { readonly project: IndexedProject; readonly relativePath: string } | undefined {
-  const folder = vscode.workspace.getWorkspaceFolder(uri);
-  if (!folder) return undefined;
-  const project = projects.find((candidate) => candidate.folder.uri.toString() === folder.uri.toString());
+  const project = [...projects].sort((a, b) => b.folder.uri.fsPath.length - a.folder.uri.fsPath.length).find(candidate => {
+    const relative = path.relative(candidate.folder.uri.fsPath, uri.fsPath);
+    return relative !== ".." && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative);
+  });
   if (!project) return undefined;
-  const relativePath = path.relative(folder.uri.fsPath, uri.fsPath).replaceAll("\\", "/");
+  const relativePath = path.relative(project.folder.uri.fsPath, uri.fsPath).replaceAll("\\", "/");
   return { project, relativePath };
 }
 

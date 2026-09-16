@@ -82,6 +82,40 @@ test("creation previews destination and delegates initial generation only after 
   assert.equal(path.basename(state.tasks[0].execution.args[0]), "create_game_project.mjs");
   assert.equal(state.tasks[0].execution.args[2], path.resolve("/new game"));
 });
+
+test("creation from an umbrella folder discovers the host and preserves destination relative to opened folder", async () => {
+  const h = harness();
+  const opened = h.vscode.workspace.workspaceFolders[0];
+  const host = path.join(opened.uri.fsPath, "TiangZ");
+  const files = new Set(["package.json", "app/core/public.ts", "tools/create_game_project.mjs"].map(file => path.join(host, file)));
+  const missing = () => Object.assign(new Error("missing"), { code: "FileNotFound" });
+  h.vscode.workspace.fs.readFile = async () => { throw missing(); };
+  h.vscode.workspace.fs.stat = async uri => { if (!files.has(uri.fsPath)) throw missing(); return { type: 1 }; };
+  h.vscode.workspace.fs.readDirectory = async () => [["TiangZ", 2], ["node_modules", 2]];
+  await h.createModuleProject();
+  assert.equal(h.state.tasks.length, 1);
+  assert.equal(h.state.tasks[0].execution.options.cwd, host);
+  assert.equal(h.state.tasks[0].execution.args[2], path.resolve(opened.uri.fsPath, "../new game"));
+  assert.equal(h.state.tasks[0].scope, opened);
+});
+
+test("multiple discovered hosts require selection; an explicit broken host never falls back", async () => {
+  const h = harness();
+  const opened = h.vscode.workspace.workspaceFolders[0];
+  const files = new Set(["A", "B"].flatMap(name => ["package.json", "app/core/public.ts", "tools/create_game_project.mjs"].map(file => path.join(opened.uri.fsPath, name, file))));
+  const missing = () => Object.assign(new Error("missing"), { code: "FileNotFound" });
+  h.vscode.workspace.fs.readFile = async () => { throw missing(); };
+  h.vscode.workspace.fs.stat = async uri => { if (!files.has(uri.fsPath)) throw missing(); return { type: 1 }; };
+  h.vscode.workspace.fs.readDirectory = async () => [["A", 2], ["B", 2]];
+  let choices;
+  h.vscode.window.showQuickPick = async items => { choices = items; return undefined; };
+  await h.createModuleProject();
+  assert.equal(choices.length, 2);
+  assert.equal(h.state.tasks.length, 0);
+  h.vscode.workspace.getConfiguration = () => ({ get: () => "./missing-host" });
+  await assert.rejects(h.createModuleProject(), /不自动改用其他宿主/);
+  assert.equal(h.state.tasks.length, 0);
+});
 test("untrusted and invalid project actions do not start a task", async () => {
   const { state, vscode, createModuleProject, runModuleProjectAction } = harness();
   vscode.workspace.isTrusted = false;

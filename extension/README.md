@@ -1,5 +1,7 @@
 # TiangZ Developer Tools
 
+打开 TiangZ 主工程的上层目录也可以使用工程树和“TiangZ：创建模块入门工程”：插件识别当前目录及直属子目录，不扫描更深层或缓存目录；多个宿主会要求选择。创建确认框显示宿主和目标目录，目标相对当前打开的目录解析。已有 engineRoot 配置或 tiangz.project.json 声明优先，不会在配置错误时暗中切换宿主。独立模块的实时语义检查仍由宿主工具负责。
+
 ## 独立模块导航
 
 新工程若包含 `tiangz.project.json`，导航自动调用其中宿主，不需要重复配置 engineRoot。“创建模块入门工程”向导复用宿主生成器；“模块工程操作”提供 doctor/setup/check/build/host-build 任务，完整规则由宿主维护。生成前展示目标位置和初始协议锁/SDK 写入范围；任务开始不等于验收通过，结果见终端及 Problems 面板。

@@ -192,7 +192,7 @@ export class TiangZProcessManager implements vscode.Disposable {
     });
     const task = new vscode.Task(
       { type: "tiangz-process", process: spec.process.name, config: spec.process.relativePath, mode: spec.mode },
-      spec.folder,
+      vscode.workspace.getWorkspaceFolder?.(spec.folder.uri) ?? spec.folder,
       `${spec.process.name} (${spec.mode === "debug" ? "调试" : "运行"})`,
       "TiangZ",
       new vscode.CustomExecution(async () => terminal),

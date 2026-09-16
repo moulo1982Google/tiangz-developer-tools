@@ -277,6 +277,37 @@ test("module descriptor clears legacy diagnostics even while legacy documents st
   } finally { rpc.dispose(); }
 });
 
+test("umbrella root is replaced by discovered project roots and open documents are reindexed", async () => {
+  const rpc = new StdioRpc(serverPath);
+  try {
+    const umbrella = process.platform === "win32" ? "file:///C:/umbrella" : "file:///umbrella";
+    const nested = `${umbrella}/TiangZ`;
+    const handlerUri = `${nested}/app/demo/WorldHandler.ts`;
+    await rpc.request("initialize", { processId: null, rootUri: umbrella, capabilities: {}, workspaceFolders: [{ uri: umbrella, name: "umbrella" }] });
+    rpc.notify("initialized", {});
+    const original = rpc.waitForNotification("tiangzProject/snapshot", p => p.rootUri === umbrella);
+    open(rpc, handlerUri, "@sessionRpcHandler(LoginScene, LoginProtocol.Login)\nexport class WorldHandler implements SessionRpcHandler<LoginScene, LoginSession, C2S_Login, S2C_Login> {}", 1);
+    await original;
+    const indexed = rpc.waitForNotification("tiangzProject/snapshot", p => p.rootUri === nested && p.snapshot.handlers.length === 1);
+    rpc.notify("tiangzProject/indexFiles", { roots: [{ rootUri: nested, uris: [handlerUri] }] });
+    const result = await indexed;
+    assert.equal(result.snapshot.handlers[0].location.relativePath, "app/demo/WorldHandler.ts");
+    const stats = await rpc.request("tiangzProject/serverStats", null);
+    assert.equal(stats.roots, 1);
+    assert.equal(stats.snapshots, 1);
+    const cleared = rpc.waitForNotification("textDocument/publishDiagnostics", p => p.uri === handlerUri && p.diagnostics.length === 0);
+    rpc.notify("tiangzProject/indexFiles", { roots: [] });
+    await cleared;
+    const removed = await rpc.request("tiangzProject/serverStats", null);
+    assert.equal(removed.roots, 0);
+    assert.equal(removed.cachedFiles, 0);
+    assert.equal(removed.snapshots, 0);
+    await rpc.request("shutdown", null);
+    rpc.notify("exit", null);
+    await rpc.waitForExit();
+  } finally { rpc.dispose(); }
+});
+
 function open(rpc, uri, text, version) {
   rpc.notify("textDocument/didOpen", {
     textDocument: { uri, languageId: "typescript", version, text },

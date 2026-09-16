@@ -2,6 +2,7 @@ import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import path from "node:path";
 
 import * as vscode from "vscode";
+import { projectTaskScope } from "./projectRoots.js";
 
 interface DevSourceLaunchSpec {
   readonly folder: vscode.WorkspaceFolder;
@@ -30,7 +31,7 @@ export class DevSourceManager implements vscode.Disposable {
     let invoked = false;
     const task = new vscode.Task(
       { type: "tiangz-dev-source", config: spec.configRelativePath },
-      spec.folder,
+      projectTaskScope(spec.folder),
       `源码开发模式 (${spec.machineName})`,
       "TiangZ",
       new vscode.CustomExecution(async () => {
