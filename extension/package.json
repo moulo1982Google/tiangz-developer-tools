@@ -45,6 +45,7 @@
     "dist/server.cjs",
     "dist/server.cjs.map",
     "schemas/**",
+    "guides/**",
     "README.md",
     "LICENSE",
     "NOTICE"
@@ -163,6 +164,14 @@
       }
     ],
     "commands": [
+      {
+        "command": "tiangzDeveloperTools.openTimerPattern",
+        "title": "TiangZ：查看延迟业务范式"
+      },
+      {
+        "command": "tiangzDeveloperTools.previewTimerSkeleton",
+        "title": "TiangZ：生成定时器方法骨架（新草稿）"
+      },
       { "command": "tiangzDeveloperTools.createModuleProject", "title": "TiangZ：创建模块入门工程", "icon": "$(new-folder)" },
       { "command": "tiangzDeveloperTools.moduleProjectAction", "title": "TiangZ：模块工程操作", "icon": "$(tools)" },
       { "command": "tiangzDeveloperTools.startModuleDevelopment", "title": "TiangZ：启动模块开发模式", "icon": "$(play)" },

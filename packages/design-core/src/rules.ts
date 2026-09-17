@@ -18,7 +18,7 @@ export const DESIGN_RULES: readonly DesignRule[] = [
   rule("persistence.record", "持久化记录", "数据库记录与运行时Entity、协议Snapshot使用不同类型。", "docs/patterns/lifecycle-and-persistence.md"),
   rule("persistence.stable-id", "稳定持久化身份", "持久化业务ID和时间戳，不保存InstanceId或TimerId。", "docs/patterns/lifecycle-and-persistence.md"),
   rule("execution.update", "固定帧更新", "每个固定逻辑帧必须执行的连续逻辑使用Update。", "docs/patterns/timer-update-and-action.md"),
-  rule("execution.timer", "稀疏Timer", "稀疏到期和周期触发使用Timer。", "docs/patterns/timer-update-and-action.md"),
+  rule("execution.timer", "所有者Timer", "业务延迟、到期和周期触发必须使用所有者Timer与方法名回调；严禁await sleep/delay/TimerSystem.WaitAsync或计时Promise，任何时长均不例外。数据库/RPC结果等待仍允许。", "docs/patterns/timer-update-and-action.md"),
   rule("execution.coalesced-timer", "合并Timer", "同一所有者下大量定时对象使用最近到期Timer统一调度。", "docs/patterns/timer-update-and-action.md"),
   rule("execution.action-delegation", "Action领域委托", "Action修改哪个领域，就调用哪个领域能力并复用其同步机制。", "docs/patterns/timer-update-and-action.md"),
   rule("data.ts-default", "TypeScript优先", "普通业务状态和行为默认留在Model/Hotfix TypeScript。", "docs/patterns/data-placement.md"),

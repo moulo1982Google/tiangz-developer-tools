@@ -188,3 +188,11 @@ node dist/tiangz-design.cjs --input .\DesignRequest.json
 ## 开源协议
 
 TiangZ Developer Tools 使用 [Apache License 2.0](LICENSE) 开源，版权归 2025-2026 郑昕 所有。分发或修改本项目时，请同时保留 [NOTICE](NOTICE) 中的版权与归属声明。
+
+## 业务时间等待禁令
+
+错误处 `Ctrl+.` 提供“查看延迟业务范式”和“生成定时器方法骨架”。后者只打开新草稿，不改原文件；Model 状态、Hotfix 方法、取消/恢复和幂等责任见随 VSIX 分发的 `extension/guides/delayed-business.md`。维护时同步宿主 `docs/patterns/timer-update-and-action.md`；运行 `npm run check`、`npm run package:extension` 后安装本地 VSIX 并重载窗口。
+
+业务 Model/Hotfix 禁止 `await sleep/delay/TimerSystem.WaitAsync`、原生 `setTimeout/setInterval/setImmediate` 与定时器 Promise 包装；延迟、倒计时和周期事件必须走所有者 `NewOnceTimer/NewRepeatedTimer` 方法名回调。数据库/RPC/锁结果等待仍允许。错误码为 `tiangz.timer.time-wait-forbidden`，常见导入与局部函数别名也检查。
+
+检查实现 `businessTimeDiagnostics` 同时供主工程编辑器/CLI 和 TiangZ 模块构建使用。模块编辑器对已打开的标准 `src/model`/`src/hotfix` 文件给出实时错误；完整与自定义目录检查仍运行宿主 `check`/`modules:typecheck`，以 manifest 为准。任意动态或跨文件时间封装仍须审查，不得绕过规范。Runtime、测试与运维工具不作为业务模板。

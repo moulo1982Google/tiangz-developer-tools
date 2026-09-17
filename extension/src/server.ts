@@ -66,10 +66,24 @@ connection.onInitialize((params: InitializeParams): InitializeResult => {
       definitionProvider: true,
       referencesProvider: true,
       hoverProvider: true,
+      codeActionProvider: { codeActionKinds: ["quickfix"] },
       codeLensProvider: { resolveProvider: false },
       workspace: { workspaceFolders: { supported: true } },
     },
   };
+});
+
+// Guidance only: never rewrite an async business method or capture its locals.
+connection.onCodeAction((params) => {
+  if (params.context.only && !params.context.only.some(kind => kind === "" || kind === "quickfix")) return [];
+  const diagnostics = params.context.diagnostics.filter(item => item.code === "tiangz.timer.time-wait-forbidden");
+  if (!diagnostics.length) return [];
+  return [
+    { title: "TiangZ：查看延迟业务范式", kind: "quickfix", diagnostics,
+      command: { title: "查看延迟业务范式", command: "tiangzDeveloperTools.openTimerPattern" } },
+    { title: "TiangZ：生成定时器方法骨架（新草稿，不修改原代码）", kind: "quickfix", diagnostics,
+      command: { title: "生成定时器方法骨架", command: "tiangzDeveloperTools.previewTimerSkeleton" } },
+  ];
 });
 
 connection.onNotification(INDEX_FILES_NOTIFICATION, (value: unknown) => {

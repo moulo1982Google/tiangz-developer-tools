@@ -62,6 +62,14 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   const moduleExplorer = new ModuleExplorer();
   context.subscriptions.push(
     moduleExplorer,
+    vscode.commands.registerCommand("tiangzDeveloperTools.openTimerPattern", () => runCommand(async () => {
+      await vscode.commands.executeCommand("markdown.showPreview", vscode.Uri.joinPath(context.extensionUri, "guides", "delayed-business.md"));
+    })),
+    vscode.commands.registerCommand("tiangzDeveloperTools.previewTimerSkeleton", () => runCommand(async () => {
+      const bytes = await vscode.workspace.fs.readFile(vscode.Uri.joinPath(context.extensionUri, "guides", "delayed-owner.ts.txt"));
+      const document = await vscode.workspace.openTextDocument({ language: "typescript", content: Buffer.from(bytes).toString("utf8") });
+      await vscode.window.showTextDocument(document, { preview: false });
+    })),
     vscode.window.createTreeView("tiangzModules", { treeDataProvider: moduleExplorer, showCollapseAll: true }),
     vscode.commands.registerCommand("tiangzDeveloperTools.inspectModules", () => moduleExplorer.refresh()),
     vscode.commands.registerCommand("tiangzDeveloperTools.openModuleLocation", openModuleLocation),

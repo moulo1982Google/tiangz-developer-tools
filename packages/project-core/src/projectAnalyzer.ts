@@ -3,6 +3,7 @@ import path from "node:path";
 import ts from "typescript";
 
 import { validateTypeScriptDependencies } from "./dependencyRules.js";
+import { businessTimeDiagnostics } from "./businessTimeRules.js";
 import { validateGeneratedIntegrity } from "./generatedIntegrity.js";
 import { resolveMachineProcessPaths } from "./launch.js";
 import { readProjectGenerators } from "./projectFiles.js";
@@ -63,7 +64,9 @@ export function analyzeTiangZProject(sources: readonly ProjectSource[]): TiangZP
   // 文件存在即委托宿主，损坏的声明也不能静默回退主工程规则。 / Never fall back on malformed module descriptors.
   if (sources.some((source) => normalizePath(source.relativePath) === "tiangz.project.json")) {
     return { analysisMode: "host-delegated", environments: [], processes: [], machines: [], declarations: [],
-      messageTypes: [], msgcodes: [], protocols: [], handlers: [], generators: [], diagnostics: [] };
+      messageTypes: [], msgcodes: [], protocols: [], handlers: [], generators: [], diagnostics: sources
+        .filter(source => /(?:^|\/)src\/(?:model|hotfix)\//.test(normalizePath(source.relativePath)))
+        .flatMap(source => businessTimeDiagnostics(source.text, source.relativePath)) };
   }
   const processes: ProcessConfigModel[] = [];
   const machines: MachineConfigModel[] = [];
@@ -368,6 +371,7 @@ function analyzeTypeScript(
   validateHotfixStateBoundary(sourceFile, source.relativePath, diagnostics);
   validateOwnedComponentBoundaries(sourceFile, source.relativePath, diagnostics);
   validateRuntimeFoundationUsage(sourceFile, source.relativePath, diagnostics);
+  if (isBusinessRuntimeSource(source.relativePath)) diagnostics.push(...businessTimeDiagnostics(source.text, source.relativePath));
   visit(sourceFile);
 
   function visit(node: ts.Node): void {

@@ -12,7 +12,11 @@
 
 在可信工作区执行“TiangZ：读取模块结构”，即可从“TiangZ 模块”树查看入口、直接依赖、公开 API、状态类型与行为绑定，并跳转源码。独立工程请设置 `tiangzDeveloperTools.engineRoot` 指向 TiangZ 宿主，`tiangzDeveloperTools.modulesDirectory` 默认为 `modules`（均相对当前工作区）。宿主须提供 `tools/inspect_game_modules.mjs`。
 
-模块导航只呈现宿主通用工具的静态结果；不会运行游戏、Cargo、代码生成或自动修复。首次和源码变化后请显式刷新。未静态加载提示不等于运行错误，动态注册需另行验证。发现根目录 `tiangz.project.json` 后，原工程树改为模块导航与宿主检查入口，旧 app/ 索引不再误报入口 Scene 缺失；模块实时语义诊断尚未接入旧 LSP，请运行宿主 check 并查看 Problems。
+模块导航只呈现宿主通用工具的静态结果；不会运行游戏、Cargo、代码生成或自动修复。首次和源码变化后请显式刷新。未静态加载提示不等于运行错误，动态注册需另行验证。发现根目录 `tiangz.project.json` 后，原工程树改为模块导航与宿主检查入口，旧 app/ 索引不再误报入口 Scene 缺失。已打开的标准 `src/model`/`src/hotfix` 文件新增时间等待实时错误，其余模块语义与自定义源码根仍运行宿主 check 并查看 Problems。
+
+### 禁止 await 时间
+
+`tiangz.timer.time-wait-forbidden` 是错误级诊断：禁止业务用 `sleep/delay/TimerSystem.WaitAsync`、原生计时器或计时 Promise 实现延迟；`.then`、导入改名和常见局部别名也检查。请使用所有者 `NewOnceTimer/NewRepeatedTimer` 与方法名回调。数据库、RPC、锁等结果等待不受此禁令禁止。宿主模块构建复用同一规则，未打开文件也不能借构建发布；须同步更新宿主所依赖的 Developer Tools core。任意动态/跨文件封装仍需代码审查。
 
 在 VS Code 资源管理器中显示 TiangZ 的 Environment、Machine、Process、Scene、Session、Unit、Component、协议与 Handler。
 
@@ -49,3 +53,7 @@
 “新建模块入门工程”可选择 **TypeScript + Rust 扩展**。插件将 `--with-rust` 传给 TiangZ 宿主脚手架；需要支持该选项的宿主及 Cargo/rustfmt。生成独立 Rust crate、Native 接口、TS 调用示例和 RUST.md，不启动服务、不自动编译 Rust。
 
 在生成工程执行 `npm run setup`、`npm run host-build`、`npm run build`、`npm run smoke`。Rust 修改需要重新编译重启；当前自动 dev 入口不支持 Native 工程。默认 TypeScript 模板不变。
+
+## 延迟业务辅助入口
+
+在 `tiangz.timer.time-wait-forbidden` 错误处按 `Ctrl+.`，可“查看延迟业务范式”或“生成定时器方法骨架”；命令面板也可调用。指南随 VSIX 离线分发，骨架只打开未保存 TypeScript 草稿，不改原文件、不自动搬动业务、不清除诊断。先适配所有者、Model 字段与现有 Hotfix System，再实现 TODO 结算/恢复。维护资源位于 `extension/guides/`，须与宿主 `docs/patterns/timer-update-and-action.md` 同步。

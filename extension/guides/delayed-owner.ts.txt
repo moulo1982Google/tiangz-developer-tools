@@ -1,0 +1,60 @@
+// 延迟业务骨架：这是待适配的草稿，不是可直接上线的建筑升级实现。
+// 先确定所有者，替换 DelayedComponent 及导入；不要放入协议 Handler。
+// Model 中添加下列字段（TimerId 从稳定 Core 入口导入）：
+// delayTimerId: TimerId | null = null; // 仅运行时，禁止持久化
+// delayRevision = 0;                // 任务代次，持久任务应恢复它
+// delayPending = false;
+// delayDueAtMs = 0;                 // 墙钟截止时间；持久化还须包含任务ID与业务参数
+// 新字段/方法形状需按模块流程 codegen、完整构建并重启，不是纯 Hotfix 更新。
+// 以下方法放入该所有者已有的 Hotfix System；不要复制第二个重复绑定的 System。
+import { TimeSystem, systemFor } from "#tiangz/model";
+import { DelayedComponent } from "#tiangz/module";
+
+@systemFor(DelayedComponent)
+export class DelayedComponentSystem extends DelayedComponent {
+  // 登记后立即返回。Handler 回复“已受理”，不是“已完成”。
+  StartDelay(durationMs: number): void {
+    if (!Number.isFinite(durationMs) || durationMs < 0) throw new Error("延迟必须是非负有限数");
+    if (this.delayPending) throw new Error("已有待完成任务，请先按业务规则取消");
+    // TODO：在此之前由领域入口完成校验、幂等受理及需要的持久化；不自动搬动扣费。
+    this.delayRevision += 1;
+    this.delayPending = true;
+    this.delayDueAtMs = TimeSystem.Instance.ServerNow + durationMs;
+    this.ArmDelay();
+  }
+
+  // 恢复完成后也调用此方法；不再次扣费、不重新计算整段工期。
+  ArmDelay(): void {
+    if (this.delayTimerId !== null) this.CancelTimer(this.delayTimerId);
+    this.delayTimerId = null;
+    if (!this.delayPending) return;
+    this.delayTimerId = this.NewOnceTimer(
+      Math.max(1, this.delayDueAtMs - TimeSystem.Instance.ServerNow),
+      "OnDelayDue",
+      this.delayRevision,
+    );
+  }
+
+  // 名称必须与登记字符串一致；先拒绝取消/重排前已排队的旧回调。
+  OnDelayDue(revision: number): void {
+    if (!this.delayPending || revision !== this.delayRevision) return;
+    this.delayTimerId = null;
+    if (TimeSystem.Instance.ServerNow < this.delayDueAtMs) {
+      this.ArmDelay();
+      return;
+    }
+    // TODO：实现以任务ID为幂等键的完成逻辑，再置 pending=false 并发布结果。
+    // 若 await DB/RPC，返回后重查任务状态/代次；持久效果需事务/幂等保证。
+    // 此异常故意保留，防止空实现被误认为完成；失败恢复/重试需显式设计。
+    throw new Error("TODO：实现到期幂等结算与失败恢复后再使用");
+  }
+
+  CancelDelay(): void {
+    // 先使旧回调失效，再取消运行时 Timer。退款/持久取消是额外业务规则。
+    this.delayRevision += 1;
+    this.delayPending = false;
+    this.delayDueAtMs = 0;
+    if (this.delayTimerId !== null) this.CancelTimer(this.delayTimerId);
+    this.delayTimerId = null;
+  }
+}

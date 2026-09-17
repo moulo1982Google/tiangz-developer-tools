@@ -1,4 +1,5 @@
 export { analyzeTiangZProject } from "./projectAnalyzer.js";
+export { businessTimeDiagnostics } from "./businessTimeRules.js";
 export { createProjectFilePlan, readProjectGenerators } from "./projectFiles.js";
 export { createDebugConfig, resolveMachineProcessPaths } from "./launch.js";
 export { formatRuntimeMetricsMarkdown, parsePrometheusText } from "./runtimeMetrics.js";

@@ -318,6 +318,36 @@ function textHash(text) {
   return createHash("sha256").update(text.replaceAll("\r\n", "\n"), "utf8").digest("hex");
 }
 
+test("module editor rejects time waits and clears diagnostics after an owned timer rewrite", async () => {
+  const rpc = new StdioRpc(serverPath);
+  try {
+    const rootUri = process.platform === "win32" ? "file:///C:/timer-game" : "file:///timer-game";
+    await rpc.request("initialize", { processId: null, rootUri, capabilities: {}, workspaceFolders: [{ uri: rootUri, name: "timer-game" }] });
+    rpc.notify("initialized", {});
+    open(rpc, `${rootUri}/tiangz.project.json`, "{}", 1);
+    const uri = `${rootUri}/modules/game/src/hotfix/Upgrade.ts`;
+    const bad = rpc.waitForNotification("textDocument/publishDiagnostics", params => params.uri === uri && params.diagnostics.some(item => item.code === "tiangz.timer.time-wait-forbidden"));
+    open(rpc, uri, "async function upgrade() { await sleep(100); }", 1);
+    const diagnostics = (await bad).diagnostics;
+    assert.equal(diagnostics.find(item => item.code === "tiangz.timer.time-wait-forbidden").severity, 1);
+    const actionParams = { textDocument: { uri }, range: diagnostics[0].range, context: { diagnostics } };
+    const actions = await rpc.request("textDocument/codeAction", actionParams);
+    assert.deepEqual(actions.map(action => action.command.command), [
+      "tiangzDeveloperTools.openTimerPattern", "tiangzDeveloperTools.previewTimerSkeleton",
+    ]);
+    assert.ok(actions.every(action => !action.edit && !action.isPreferred && !action.command.arguments));
+    assert.deepEqual(await rpc.request("textDocument/codeAction", { ...actionParams, context: { diagnostics, only: ["source.fixAll"] } }), []);
+    assert.deepEqual(await rpc.request("textDocument/codeAction", { ...actionParams, context: { diagnostics: [{ ...diagnostics[0], code: "unrelated" }] } }), []);
+    const fixed = rpc.waitForNotification("textDocument/publishDiagnostics", params => params.uri === uri && params.diagnostics.length === 0);
+    rpc.notify("textDocument/didChange", { textDocument: { uri, version: 2 }, contentChanges: [{ text: 'class Upgrade { Start() { this.NewOnceTimer(100, "Complete"); } }' }] });
+    await fixed;
+    assert.deepEqual(await rpc.request("textDocument/codeAction", { ...actionParams, context: { diagnostics: [] } }), []);
+    await rpc.request("shutdown", null);
+    rpc.notify("exit", null);
+    await rpc.waitForExit();
+  } finally { rpc.dispose(); }
+});
+
 class StdioRpc {
   #child;
   #buffer = Buffer.alloc(0);
