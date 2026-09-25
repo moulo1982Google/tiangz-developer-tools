@@ -1,6 +1,6 @@
 # TiangZ Developer Tools
 
-0.7 配套候选继续使用 Developer Tools 自身的 0.15.2 版本序列。实际包内 `dist/build-info.json` 记录扩展/Core 版本与运行 bundle 哈希；工作树名称不代表插件版本，也不代表已经安装。Process Schema 新增完整 network 字段及 0.7 的 writeTimeoutMs 提示；该字段不适用于 0.6.x 宿主，不会自动写入旧工程配置。
+0.7 配套候选继续使用 Developer Tools 自身的 0.15.2 版本序列。实际包内 `dist/build-info.json` 记录扩展/Core 版本与运行 bundle 哈希；工作树名称不代表插件版本，也不代表已经安装。Process Schema 新增完整 network 字段及 0.7 的 writeTimeoutMs、maxAcceptedConnections、maxPendingHandshakes 提示，包含 Rust 同步的整数范围与默认值；这些字段不适用于 0.6.x 宿主，不会自动写入旧工程配置。入站连接与握手额度由当前 Process 全部业务 listener 共享，不代表帧字节或 KCP 未确认缓存上限。
 
 打开 TiangZ 主工程的上层目录也可以使用工程树和“TiangZ：创建模块入门工程”：插件识别当前目录及直属子目录，不扫描更深层或缓存目录；多个宿主会要求选择。创建确认框显示宿主和目标目录，目标相对当前打开的目录解析。已有 engineRoot 配置或 tiangz.project.json 声明优先，不会在配置错误时暗中切换宿主。独立模块的实时语义检查仍由宿主工具负责。
 
