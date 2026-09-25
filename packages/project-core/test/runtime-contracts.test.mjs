@@ -91,6 +91,33 @@ worker.NewOnceTimer(1, "GeneratedTick", 1, { onCancelled: undefined });
   assert.match(diagnostics[0].message, /onCancelled.*Cancel/);
 });
 
+test("defaulted callback parameters accept undefined without accepting incompatible values", () => {
+  const diagnostics = check(`
+import { Component, type TimerCancelledContext } from "../core/public";
+class Worker extends Component {
+  Tick(now = Date.now()) {}
+  Optional(now?: number) {}
+  Destructured({ value }: { value: number } = { value: 1 }) {}
+  Cancel(now = Date.now(), context: TimerCancelledContext) {}
+}
+declare const worker: Worker;
+declare const maybe: number | undefined;
+declare const bad: string | undefined;
+worker.NewRepeatedTimer(5000, "Tick");
+worker.NewOnceTimer(1, "Tick", maybe);
+worker.NewOnceTimer(1, "Optional");
+worker.NewOnceTimer(1, "Destructured");
+worker.NewOnceTimer(1, "Tick", undefined, { onCancelled: "Cancel" });
+worker.NewOnceTimer(1, "Tick", bad);
+worker.NewOnceTimer(1, "Tick", null);
+worker.NewOnceTimer(1, "Destructured", { value: "wrong" });
+worker.NewOnceTimer(1, "Cancel");
+`);
+  assert.equal(diagnostics.length, 4, JSON.stringify(diagnostics));
+  assert.ok(diagnostics.every(item => item.code === "tiangz.timer.argument-mismatch"));
+  assert.deepEqual(diagnostics.map(item => item.message.split("match ")[1]), ["Tick", "Tick", "Destructured", "Cancel"]);
+});
+
 test("literal constants and options work; dynamic and generic contracts remain unproven warnings", () => {
   const diagnostics = check(`
 import { Component, TimerSystem } from "../core/public";

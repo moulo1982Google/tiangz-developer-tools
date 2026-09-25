@@ -228,9 +228,13 @@ export function runtimeContractDiagnostics(program: ts.Program, options: Runtime
         break;
       }
       const argument = args[index];
-      if (argument) results.push(assignable(argument, type));
-      else if (!(parameter.flags & api.SymbolFlags.Optional)
-        && !(declaration && api.isParameter(declaration) && (declaration.questionToken || declaration.initializer))) results.push("no");
+      const optional = !!(parameter.flags & api.SymbolFlags.Optional)
+        || !!(declaration && api.isParameter(declaration) && (declaration.questionToken || declaration.initializer));
+      if (argument) {
+        // 默认参数的声明类型不包含 undefined，但传入它会触发默认值。 / Undefined activates a default even when absent from the declared type.
+        const alternatives = argument.isUnion() ? argument.types : [argument];
+        results.push(combine(alternatives.map(value => optional && (value.flags & api.TypeFlags.Undefined) ? "yes" : assignable(value, type))));
+      } else if (!optional) results.push("no");
     }
     return combine(results);
   }

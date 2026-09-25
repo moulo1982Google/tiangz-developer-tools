@@ -18,6 +18,8 @@ Timer 使用调用的实际 receiver，允许类外调用、`super`、生成 Sys
 
 主工程 CLI 和 Language Server 共用 `RuntimeContractProject`。按本工程 `tsconfig.json` 创建一个 LanguageService，源码 overlay 优先于磁盘；相同文本复用 snapshot，不逐次启动 tsc 进程。普通 TS 错误同样显示，不能因缺失导入未命中规则就报告完整成功。现有 AST 生命周期存在性检查保留，Program 生效时不再重复 AST async 判断。
 
+默认参数按调用语义处理：`Tick(now = Date.now())` 接受未传值、`undefined` 或 `number | undefined`，不能仅根据其声明内推导出的 `number` 类型报错。`string | undefined`、`null`、不兼容的解构对象或后续缺少必填参数仍拒绝。该反例来自 MMORPG 的过期清理 Timer，插件 TS 5 和宿主 TS 6 均有回归覆盖。
+
 LSP 最多保留 4 个工程类型缓存；每个缓存最多 10000 文件、128 MiB 源文本，超出后明确标记不可用并释放服务。这是缓存输入预算，不是 TypeScript 整体堆内存上限。工程关闭/替换、服务 shutdown 都 dispose。统计请求提供 cachedTypeProjects/cachedTypeFiles。变更检查有原有 150ms debounce；依赖图与 tsconfig 中的范围决定参与的类型文件。未保存的既有文件参与检查，untitled 和不在 Program 的文件不属于此次类型验证。
 
 VSIX 带与其编译器同版本的标准库与授权文本，`build-info.json` 记录版本及每份标准库哈希。不能只验证仓库内运行成功而遗漏实际安装包。

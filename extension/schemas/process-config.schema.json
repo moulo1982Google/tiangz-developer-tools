@@ -241,14 +241,16 @@
           "description": "端点面向内网、外网或混合流量。"
         },
         "staticMapIds": {
+          "deprecated": true,
           "type": "array",
           "items": { "type": "integer", "minimum": 1 },
           "uniqueItems": true,
-          "description": "MapHost启动时固定创建的静态地图配置ID；空数组表示不承载静态地图。"
+          "description": "旧版 MapHost 静态地图部署字段。0.7 改用 MMORPG 模块部署数据包；过渡期显式双写必须与模块值一致，冲突拒绝启动。旧部署仍支持本字段。"
         },
         "acceptDynamicMaps": {
+          "deprecated": true,
           "type": "boolean",
-          "description": "MapHost是否注册MapManager并接受动态副本分配。"
+          "description": "旧版 MapHost 动态地图开关。0.7 改用 MMORPG 模块部署数据包；过渡期显式双写必须一致，缺失时保留旧默认 false。旧部署仍支持本字段。"
         }
       },
       "additionalProperties": true
