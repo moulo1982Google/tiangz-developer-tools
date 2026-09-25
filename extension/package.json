@@ -45,6 +45,8 @@
     "dist/extension.cjs.map",
     "dist/server.cjs",
     "dist/server.cjs.map",
+    "dist/lib*.d.ts",
+    "dist/typescript-*.txt",
     "schemas/**",
     "guides/**",
     "README.md",

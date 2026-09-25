@@ -1,14 +1,64 @@
 import assert from "node:assert/strict";
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { projectFiles, contractSource } from "../../packages/project-core/test/runtime-contract-fixture.mjs";
 
 const testRoot = path.dirname(fileURLToPath(import.meta.url));
-const serverPath = path.resolve(testRoot, "../dist/server.cjs");
+const serverPath = process.env.TIANGZ_TEST_SERVER_PATH ?? path.resolve(testRoot, "../dist/server.cjs");
+
+test("CLI and actual LSP share typed contracts, unsaved changes and project cache disposal", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "tiangz-contract-lsp-"));
+  const rpc = new StdioRpc(serverPath);
+  try {
+    for (const [relative, text] of Object.entries(projectFiles)) {
+      const file = path.join(root, relative);
+      await mkdir(path.dirname(file), { recursive: true });
+      await writeFile(file, text);
+    }
+    const cli = spawnSync(process.execPath, [path.resolve(testRoot, "../../dist/tiangz-check-project.cjs"), root, "--format", "json"], { encoding: "utf8", windowsHide: true });
+    assert.equal(cli.status, 1, cli.stderr);
+    const checked = JSON.parse(cli.stdout);
+    assert.equal(checked.runtimeContracts.status, "checked");
+    assert.equal(checked.errors, 3, cli.stdout);
+    const rootUri = pathToFileURL(root).toString();
+    const sourceUri = pathToFileURL(path.join(root, "app/model/Worker.ts")).toString();
+    await rpc.request("initialize", { processId: null, rootUri, capabilities: {}, workspaceFolders: [{ uri: rootUri, name: "contracts" }] });
+    rpc.notify("initialized", {});
+    const first = rpc.waitForNotification("tiangzProject/snapshot", params => params.rootUri === rootUri);
+    rpc.notify("tiangzProject/indexFiles", { roots: [{ rootUri, uris: Object.keys(projectFiles).map(file => pathToFileURL(path.join(root, file)).toString()) }] });
+    const snapshot = (await first).snapshot;
+    assert.equal(snapshot.runtimeContracts?.status, "checked", JSON.stringify(snapshot.runtimeContracts));
+    assert.deepEqual(snapshot.diagnostics, checked.diagnostics);
+    const stats = await rpc.request("tiangzProject/serverStats", null);
+    assert.equal(stats.cachedTypeProjects, 1);
+    assert.ok(stats.cachedTypeFiles > 2 && stats.cachedTypeFiles < 200);
+
+    const fixed = contractSource.replace("async Awake()", "Awake()").replace('"Missing"', '"Tick"').replace('"wrong"', '{ value: 2 }');
+    const update = rpc.waitForNotification("tiangzProject/snapshot", params => params.rootUri === rootUri && params.snapshot.runtimeContracts?.status === "checked" && params.snapshot.diagnostics.length === 0);
+    open(rpc, sourceUri, fixed, 1);
+    await update;
+    const afterEdit = await rpc.request("tiangzProject/serverStats", null);
+    assert.equal(afterEdit.cachedTypeProjects, 1);
+    assert.equal(afterEdit.cachedTypeFiles, stats.cachedTypeFiles);
+    const closed = rpc.waitForNotification("textDocument/publishDiagnostics", params => params.uri === sourceUri && params.diagnostics.length === 0);
+    rpc.notify("tiangzProject/indexFiles", { roots: [] });
+    await closed;
+    const afterClose = await rpc.request("tiangzProject/serverStats", null);
+    assert.equal(afterClose.cachedTypeProjects, 0);
+    assert.equal(afterClose.cachedTypeFiles, 0);
+    await rpc.request("shutdown", null);
+    rpc.notify("exit", null);
+    await rpc.waitForExit();
+  } finally {
+    rpc.dispose();
+    await rm(root, { recursive: true, force: true });
+  }
+});
 
 test("provides protocol diagnostics, navigation, Hover and CodeLens", async () => {
   const rpc = new StdioRpc(serverPath);

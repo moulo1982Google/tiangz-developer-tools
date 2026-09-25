@@ -32,6 +32,7 @@
 - 重复 Handler、缺失 Handler、RPC 类型不匹配、工程依赖方向与配置错误诊断。
 - Generated 过期、缺失、遗留与手工修改诊断。
 - Model声明的生命周期与迁移能力缺失System、方法或同步实现时发布错误诊断。
+- 主工程生命周期/方法名 Timer 由共享 Program 规则检查实际 Core 类型、接收者和回调参数；CLI 与宿主模块检查复用规则。动态无法证明的写法给 warning。类型服务复用缓存，工程关闭时释放，匹配的 TypeScript 标准库随 VSIX 分发。模块完整实时 Program 检查仍由现有宿主检查任务承接，不能把未保存模块修改当作已经验证。
 - Process配置JSON补全，以及StartMachine部署集合内`process.identity`唯一性诊断。
 - Timer回调、取消语义、同步/Veto Scene Event契约和持久化运行时ID诊断。
 - 普通`Unit`误加`@actor`、`ActorUnit`遗漏`@actor`的错误诊断。

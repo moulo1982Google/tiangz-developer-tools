@@ -37,6 +37,7 @@ async function runCli(args: readonly string[]): Promise<number> {
         elapsedMs: Number(result.elapsedMs.toFixed(2)),
         errors: errors.length,
         warnings: warnings.length,
+        runtimeContracts: result.snapshot.runtimeContracts,
         diagnostics: result.snapshot.diagnostics,
       }, null, 2)}\n`);
     } else {
@@ -44,7 +45,9 @@ async function runCli(args: readonly string[]): Promise<number> {
         const location = `${diagnostic.location.relativePath}:${diagnostic.location.line + 1}:${diagnostic.location.character + 1}`;
         process.stdout.write(`${location} ${diagnostic.severity === "error" ? "错误" : "警告"} ${diagnostic.code} ${diagnostic.message}\n`);
       }
-      const status = failed ? "检查失败" : "检查通过";
+      const contracts = result.snapshot.runtimeContracts;
+      if (contracts?.status === "unavailable") process.stdout.write(`类型契约未检查：${contracts.reason}\n`);
+      const status = failed ? "检查失败" : contracts?.status === "unavailable" ? "基础静态检查通过（类型契约未检查）" : "检查通过";
       process.stdout.write(`${status}：${result.fileCount} 个文件，${errors.length} 个错误，${warnings.length} 个警告，${result.elapsedMs.toFixed(1)} ms\n`);
     }
     return failed ? 1 : 0;

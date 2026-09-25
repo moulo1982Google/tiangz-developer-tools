@@ -111,6 +111,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   };
 
   const watchers = [
+    vscode.workspace.createFileSystemWatcher("**/tsconfig*.json"),
     vscode.workspace.createFileSystemWatcher("**/tiangz.project.json"),
     vscode.workspace.createFileSystemWatcher("**/configs/**/*.json"),
     vscode.workspace.createFileSystemWatcher("**/app/**/*.ts"),

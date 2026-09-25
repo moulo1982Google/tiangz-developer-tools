@@ -37,6 +37,7 @@ export async function discoverWorkspaceFolder(folder: vscode.WorkspaceFolder): P
   await collect(`${configRoot}/**/*.json`);
   for (const root of roots) await collect(`${root}/**/*.ts`);
   await collectManifestFiles();
+  await addExisting("tsconfig.json");
   const loaded = await Promise.all(uris.map(async (uri) => {
     const metadata = await vscode.workspace.fs.stat(uri);
     if (metadata.size > maxFileSizeBytes) return undefined;

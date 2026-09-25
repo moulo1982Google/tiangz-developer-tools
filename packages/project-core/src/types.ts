@@ -149,6 +149,13 @@ export interface CodegenGeneratorModel {
 }
 
 export interface TiangZProjectSnapshot {
+  /** 类型检查状态与规则版本，缺失工程环境不能冒充已检查。 / Type-check availability and rule identity. */
+  readonly runtimeContracts?: {
+    readonly status: "checked" | "unavailable";
+    readonly ruleSetVersion: number;
+    readonly typescriptVersion: string;
+    readonly reason?: string;
+  };
   /** 独立模块由声明宿主检查，不套用 app/ 主工程规则。 / Module analysis belongs to its declared host. */
   readonly analysisMode?: "host-delegated";
   readonly environments: readonly string[];

@@ -4,6 +4,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 
 import {
   analyzeTiangZProject,
+  RuntimeContractProject,
   type HandlerModel,
   type ProjectSource,
   type ProtocolDescriptorModel,
@@ -48,6 +49,8 @@ const connection = createConnection(ProposedFeatures.all);
 const documents = new TextDocuments(TextDocument);
 const sources = new Map<string, CachedSource>();
 const snapshots = new Map<string, TiangZProjectSnapshot>();
+const contractProjects = new Map<string, RuntimeContractProject>();
+const MAX_CACHED_TYPE_PROJECTS = 4;
 const publishedUris = new Set<string>();
 const indexedUris = new Set<string>();
 let rootUris: readonly string[] = [];
@@ -95,6 +98,9 @@ connection.onNotification(INDEX_FILES_NOTIFICATION, (value: unknown) => {
   const groups = candidates.filter(isIndexedRootFiles);
   rootUris = [...new Set(groups.map(group => group.rootUri))];
   for (const root of snapshots.keys()) if (!rootUris.includes(root)) snapshots.delete(root);
+  for (const [root, project] of contractProjects) {
+    if (!rootUris.includes(root)) { project.dispose(); contractProjects.delete(root); }
+  }
   for (const [uri, source] of sources) {
     if (!rootUris.includes(source.rootUri)) {
       sources.delete(uri);
@@ -256,6 +262,8 @@ connection.onCodeLens((params): CodeLens[] => {
 connection.onRequest(SERVER_STATS_REQUEST, () => ({
   roots: rootUris.length,
   cachedFiles: sources.size,
+  cachedTypeProjects: contractProjects.size,
+  cachedTypeFiles: [...contractProjects.values()].reduce((sum, project) => sum + project.cachedFileCount, 0),
   snapshots: snapshots.size,
   protocols: [...snapshots.values()].reduce((sum, snapshot) => sum + snapshot.protocols.length, 0),
   handlers: [...snapshots.values()].reduce((sum, snapshot) => sum + snapshot.handlers.length, 0),
@@ -271,6 +279,8 @@ connection.onShutdown(() => {
   for (const uri of publishedUris) connection.sendDiagnostics({ uri, diagnostics: [] });
   sources.clear();
   snapshots.clear();
+  for (const project of contractProjects.values()) project.dispose();
+  contractProjects.clear();
   indexedUris.clear();
 });
 
@@ -334,7 +344,17 @@ function validateWorkspace(): void {
     const projectSources = [...sources.values()]
       .filter((source) => source.rootUri === rootUri)
       .map(({ relativePath, text }) => ({ relativePath, text }));
-    const snapshot = analyzeTiangZProject(projectSources);
+    let project = contractProjects.get(rootUri);
+    if (!project) project = new RuntimeContractProject(fileURLToPath(rootUri));
+    const contracts = project.analyze(projectSources);
+    contractProjects.delete(rootUri);
+    if (contracts.status === "checked") contractProjects.set(rootUri, project);
+    while (contractProjects.size > MAX_CACHED_TYPE_PROJECTS) {
+      const oldest = contractProjects.keys().next().value!;
+      contractProjects.get(oldest)!.dispose();
+      contractProjects.delete(oldest);
+    }
+    const snapshot = analyzeTiangZProject(projectSources, contracts);
     snapshots.set(rootUri, snapshot);
     connection.sendNotification(SNAPSHOT_NOTIFICATION, { rootUri, snapshot });
     const grouped = new Map<string, ReturnType<typeof toDiagnostic>[]>();
@@ -349,6 +369,11 @@ function validateWorkspace(): void {
       const values = grouped.get(uri) ?? [];
       connection.sendDiagnostics({ uri, diagnostics: values });
       nextPublished.add(uri);
+    }
+    // 配置或依赖图内未被旧索引覆盖的类型错误也必须可定位。
+    // Publish type diagnostics even when the legacy text index did not include their file.
+    for (const [uri, values] of grouped) {
+      if (!nextPublished.has(uri)) { connection.sendDiagnostics({ uri, diagnostics: values }); nextPublished.add(uri); }
     }
   }
   for (const uri of publishedUris) {
