@@ -1,5 +1,7 @@
 # TiangZ Developer Tools
 
+0.7 配套候选继续使用 Developer Tools 自身的 0.15.2 版本序列。实际包内 `dist/build-info.json` 记录扩展/Core 版本与运行 bundle 哈希；工作树名称不代表插件版本，也不代表已经安装。Process Schema 新增完整 network 字段及 0.7 的 writeTimeoutMs 提示；该字段不适用于 0.6.x 宿主，不会自动写入旧工程配置。
+
 打开 TiangZ 主工程的上层目录也可以使用工程树和“TiangZ：创建模块入门工程”：插件识别当前目录及直属子目录，不扫描更深层或缓存目录；多个宿主会要求选择。创建确认框显示宿主和目标目录，目标相对当前打开的目录解析。已有 engineRoot 配置或 tiangz.project.json 声明优先，不会在配置错误时暗中切换宿主。独立模块的实时语义检查仍由宿主工具负责。
 
 ## 独立模块导航
@@ -15,6 +17,8 @@
 模块导航只呈现宿主通用工具的静态结果；不会运行游戏、Cargo、代码生成或自动修复。首次和源码变化后请显式刷新。未静态加载提示不等于运行错误，动态注册需另行验证。发现根目录 `tiangz.project.json` 后，原工程树改为模块导航与宿主检查入口，旧 app/ 索引不再误报入口 Scene 缺失。已打开的标准 `src/model`/`src/hotfix` 文件新增时间等待实时错误，其余模块语义与自定义源码根仍运行宿主 check 并查看 Problems。
 
 ### 禁止 await 时间
+
+0.7 配套候选修正别名遮蔽：导入的 pause 与函数参数 pause、不同函数的局部别名分别解析；块、catch、循环作用域也独立。编辑器与 CLI 共用词法规则，合法数据库/RPC 回调不因同名被拦截；外层真实时间调用仍报错。它不是跨文件或可变别名的数据流分析，动态封装仍需审查。
 
 `tiangz.timer.time-wait-forbidden` 是错误级诊断：禁止业务用 `sleep/delay/TimerSystem.WaitAsync`、原生计时器或计时 Promise 实现延迟；`.then`、导入改名和常见局部别名也检查。请使用所有者 `NewOnceTimer/NewRepeatedTimer` 与方法名回调。数据库、RPC、锁等结果等待不受此禁令禁止。宿主模块构建复用同一规则，未打开文件也不能借构建发布；须同步更新宿主所依赖的 Developer Tools core。任意动态/跨文件封装仍需代码审查。
 

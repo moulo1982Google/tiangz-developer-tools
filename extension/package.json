@@ -40,6 +40,7 @@
     "Debug"
   ],
   "files": [
+    "dist/build-info.json",
     "dist/extension.cjs",
     "dist/extension.cjs.map",
     "dist/server.cjs",

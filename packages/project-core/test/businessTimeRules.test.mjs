@@ -29,6 +29,41 @@ test("normal async results and owned method-name timers remain legal", () => {
   `, "src/hotfix/Upgrade.ts"), []);
 });
 
+test("timer import aliases respect parameters and sibling lexical scopes", () => {
+  const diagnostics = businessTimeDiagnostics(`
+    import { setTimeout as pause } from 'node:timers/promises';
+    async function waitForResult(pause: () => Promise<void>) { await pause(); }
+    async function first() { const nap = pause; await nap(100); }
+    async function second() { const nap = () => repository.Save(); await nap(); }
+  `, "src/hotfix/Upgrade.ts");
+  assert.equal(diagnostics.length, 1);
+  assert.equal(diagnostics[0].location.line, 3);
+});
+
+test("namespace imports and native globals respect local shadowing", () => {
+  const diagnostics = businessTimeDiagnostics(`
+    import * as timers from 'node:timers/promises';
+    async function read(timers: { setTimeout: () => Promise<void> }) { await timers.setTimeout(); }
+    async function save(globalThis: { setTimeout: () => Promise<void> }) { await globalThis.setTimeout(); }
+    async function outside() { await timers.setTimeout(100); }
+  `, "src/hotfix/Upgrade.ts");
+  assert.equal(diagnostics.length, 1);
+  assert.equal(diagnostics[0].location.line, 4);
+});
+
+test("block and catch bindings do not contaminate surrounding alias resolution", () => {
+  const diagnostics = businessTimeDiagnostics(`
+    import { setTimeout as pause } from 'node:timers/promises';
+    async function work() {
+      { const pause = () => repository.Load(); await pause(); }
+      try { await repository.Save(); } catch (pause) { pause(); }
+      await pause(1);
+    }
+  `, "src/hotfix/Upgrade.ts");
+  assert.equal(diagnostics.length, 1);
+  assert.equal(diagnostics[0].location.line, 5);
+});
+
 test("editor uses same errors for main and module sources, without applying legacy rules to modules", () => {
   for (const sources of [
     [{ relativePath: "app/hotfix/Upgrade.ts", text: "await sleep(1);" }],

@@ -348,6 +348,33 @@ test("module editor rejects time waits and clears diagnostics after an owned tim
   } finally { rpc.dispose(); }
 });
 
+test("language server applies the same lexical timer rule to module edits", async () => {
+  const rpc = new StdioRpc(serverPath);
+  try {
+    const rootUri = process.platform === "win32" ? "file:///C:/timer-scope-game" : "file:///timer-scope-game";
+    await rpc.request("initialize", { processId: null, rootUri, capabilities: {}, workspaceFolders: [{ uri: rootUri, name: "timer-scope-game" }] });
+    rpc.notify("initialized", {});
+    open(rpc, `${rootUri}/tiangz.project.json`, "{}", 1);
+    const uri = `${rootUri}/modules/game/src/hotfix/Upgrade.ts`;
+    const source = "import { setTimeout as pause } from 'node:timers/promises';\n"
+      + "async function valid(pause: () => Promise<void>) { await pause(); }\n"
+      + "async function invalid() { await pause(10); }\n";
+    const bad = rpc.waitForNotification("textDocument/publishDiagnostics", params => params.uri === uri && params.diagnostics.length > 0);
+    open(rpc, uri, source, 1);
+    const diagnostics = (await bad).diagnostics;
+    assert.equal(diagnostics.length, 1);
+    assert.equal(diagnostics[0].code, "tiangz.timer.time-wait-forbidden");
+    assert.equal(diagnostics[0].severity, 1);
+    assert.equal(diagnostics[0].range.start.line, 2);
+    const fixed = rpc.waitForNotification("textDocument/publishDiagnostics", params => params.uri === uri && params.diagnostics.length === 0);
+    rpc.notify("textDocument/didChange", { textDocument: { uri, version: 2 }, contentChanges: [{ text: source.split("\n").slice(0, 2).join("\n") }] });
+    await fixed;
+    await rpc.request("shutdown", null);
+    rpc.notify("exit", null);
+    await rpc.waitForExit();
+  } finally { rpc.dispose(); }
+});
+
 class StdioRpc {
   #child;
   #buffer = Buffer.alloc(0);
