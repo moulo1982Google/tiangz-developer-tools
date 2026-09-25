@@ -45,6 +45,10 @@
               "type": "integer", "minimum": 1, "maximum": 1000000, "default": 1024,
               "description": "TiangZ 0.7 起支持。当前 Process 全部流式业务监听端口共享的未完成握手上限；成功、失败或取消后归还名额。KCP 的无状态握手不占用此名额。0.6.x 宿主不接受此字段。"
             },
+            "maxOutboundBufferedBytes": {
+              "type": "integer", "minimum": 1, "maximum": 1073741824, "default": 67108864,
+              "description": "TiangZ 0.7 起支持。当前 Process 全部已登记 ConnectionWriter 持有批次的 payload 字节预算，覆盖排队与写出；广播按接收者保守累计。超限拒绝发送并关闭该连接。不包括独立主动 Inner 链路、KCP 内部可靠缓存或整个进程内存。0.6.x 宿主不接受此字段。"
+            },
             "backend": { "type": "string", "enum": ["epoll", "io-uring"], "deprecationMessage": "请使用 ioBackend。" },
             "uringEntries": { "type": "integer", "enum": [64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768], "default": 1024 },
             "uringReadBufferBytes": { "type": "integer", "minimum": 4096, "maximum": 1048576, "default": 65536 },

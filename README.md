@@ -153,6 +153,8 @@ node dist/tiangz-design.cjs --input .\DesignRequest.json
 
 `tiangz.architecture.component-public-collection`与`tiangz.architecture.native-ref-in-handler`同样是低噪音黄色建议。前者防止业务绕过 Component 的集合所有权，后者防止 Handler 泄漏可变 Native 句柄；所属 System 和 Bench 仍可按需要直接使用底层能力。
 
+0.7 network Schema 包含 `maxOutboundBufferedBytes`（默认 64 MiB、1..1 GiB）。它约束已登记 ConnectionWriter 的批次 payload，包括排队和写出；广播按接收者累计，不代表整个 Process 内存，也不覆盖独立主动 Inner 链路或 KCP 内部可靠缓存。插件版本继续按自身版本序列，旧 0.6.x 宿主拒绝该新增配置字段。
+
 生命周期与方法名 Timer 的类型规则由共享 Program 实现提供，CLI、主工程 LSP 与声明宿主的模块检查复用同一规则。动态无法证明的情况返回 warning；稳定诊断码、范围和缓存边界见[类型契约](docs/runtime-contracts.md)。事件和持久化 ID 的现有单文件规则继续保留。
 
 `tiangz.hotfix.instance-state`是错误级诊断。它覆盖直接导入、导入别名和命名空间导入，例如 `import { systemFor as bindSystem } ...` 与 `@model.systemFor(...)`；把缓存、TimerId 或其他长期状态写入行为类会在 VS Code Problems 中直接标红。请把状态放到对应的 Model Component/Entity，Handler 只保留参数校验和调用链编排。
