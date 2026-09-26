@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
@@ -19,7 +20,9 @@ test("MCP暴露只读设计规则和Quest推荐", async () => {
   const client = new Client({ name: "tiangz-design-test", version: "1.0.0" });
   try {
     await client.connect(transport);
+    assert.equal(client.getServerVersion()?.version, JSON.parse(readFileSync(path.join(root, "package.json"), "utf8")).version);
     const tools = await client.listTools();
+    assert.ok(tools.tools.every(tool => tool.annotations?.readOnlyHint === true && tool.annotations?.destructiveHint === false));
     assert.deepEqual(tools.tools.map((tool) => tool.name).sort(), [
       "infer_system_archetype",
       "list_design_rules",

@@ -2,6 +2,9 @@ import { McpServer } from "@modelcontextprotocol/server";
 import { serveStdio } from "@modelcontextprotocol/server/stdio";
 import * as z from "zod/v4";
 
+// 构建时从包清单注入；归档移动后不依赖外部 package.json。 / Injected from the package manifest so a relocated bundle needs no external manifest.
+declare const TIANGZ_DESIGN_MCP_VERSION: string;
+
 import {
   DESIGN_RULES,
   formatDesignRecommendation,
@@ -27,7 +30,7 @@ const designRequestSchema = z.object({
 /** 创建只读TiangZ设计工具服务；每个MCP连接使用独立Server实例，不共享会话状态。 / Creates a read-only TiangZ design tool server; every MCP connection gets an isolated server instance with no shared session state. */
 export function createDesignMcpServer(): McpServer {
   const server = new McpServer(
-    { name: "tiangz-design", version: "0.13.0" },
+    { name: "tiangz-design", version: TIANGZ_DESIGN_MCP_VERSION },
     { capabilities: { tools: {} }, instructions: "Use deterministic TiangZ design rules before suggesting business code. Never modify Core, Rust, or Generated without explicit evidence." },
   );
   server.registerTool("list_design_rules", {

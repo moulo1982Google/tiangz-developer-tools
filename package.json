@@ -1,6 +1,6 @@
 {
   "name": "@tiangz/developer-tools-core",
-  "version": "0.16.1-rc.1",
+  "version": "0.16.1-rc.2",
   "description": "TiangZ 工程模型、静态索引与 VS Code 开发工具",
   "author": "moulo",
   "license": "Apache-2.0",
@@ -38,6 +38,8 @@
     "dist/tiangz-design.cjs.map",
     "dist/tiangz-design-mcp.cjs",
     "dist/tiangz-design-mcp.cjs.map",
+    "dist/tiangz-design-mcp.build-info.json",
+    "dist/tiangz-design-mcp.NOTICES.txt",
     "README.md",
     "docs/v0.7-dependency-rules.md",
     "LICENSE",
