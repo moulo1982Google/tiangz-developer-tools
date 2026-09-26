@@ -157,6 +157,8 @@ node dist/tiangz-design.cjs --input .\DesignRequest.json
 
 `maxIngressBufferedBytes` 独立限制所有业务 listener 的已解码 Rust 入站帧（默认 64 MiB、1..1 GiB），覆盖队列等待与热更延后帧。额度不足时 Inner RPC 返回现有入口过载，外部/单向连接或 Session 关闭；释放后恢复准入。控制通知不占帧额度，解码器、Host 打包副本、V8/TS mailbox 与 KCP 可靠缓存不在此项范围内。
 
+`maxKcpBufferedBytes` 则限制 KCP C 缓存和输出引用，默认 64 MiB、1..1 GiB，各 Session 另限 4 MiB。使用包含 ACK 扩容峰值的保守额度，纯 ACK 在满额度时仍能释放已确认数据。拒绝或输出回调失败会关闭对应 Session，不能丢掉可靠报文后只记日志。接收/UDP 封包副本、Rust 容器和 V8 不在本项范围内。
+
 生命周期与方法名 Timer 的类型规则由共享 Program 实现提供，CLI、主工程 LSP 与声明宿主的模块检查复用同一规则。动态无法证明的情况返回 warning；稳定诊断码、范围和缓存边界见[类型契约](docs/runtime-contracts.md)。事件和持久化 ID 的现有单文件规则继续保留。
 
 `tiangz.hotfix.instance-state`是错误级诊断。它覆盖直接导入、导入别名和命名空间导入，例如 `import { systemFor as bindSystem } ...` 与 `@model.systemFor(...)`；把缓存、TimerId 或其他长期状态写入行为类会在 VS Code Problems 中直接标红。请把状态放到对应的 Model Component/Entity，Handler 只保留参数校验和调用链编排。
