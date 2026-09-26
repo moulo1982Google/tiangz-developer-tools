@@ -47,14 +47,14 @@
             },
             "maxOutboundBufferedBytes": {
               "type": "integer", "minimum": 1, "maximum": 1073741824, "default": 67108864,
-              "description": "TiangZ 0.7 起支持。当前 Process 全部已登记 ConnectionWriter 持有批次的 payload 字节预算，覆盖排队与写出；广播按接收者保守累计。超限拒绝发送并关闭该连接。不包括独立主动 Inner 链路、KCP 内部可靠缓存或整个进程内存。0.6.x 宿主不接受此字段。"
+              "description": "TiangZ 0.7 起支持。当前 Process 的 ConnectionWriter payload 与主动 Inner Host 整包共享字节预算，覆盖复制后的待调度、排队与在途写出；广播按接收者、Inner 按整包保守累计。Writer 超限拒绝并关闭连接，Host 整包超限在复制/提交前拒绝。不含 RPC 响应、入站/V8、KCP 内部可靠缓存或整个进程内存。0.6.x 宿主不接受此字段。"
             },
             "backend": { "type": "string", "enum": ["epoll", "io-uring"], "deprecationMessage": "请使用 ioBackend。" },
             "uringEntries": { "type": "integer", "enum": [64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768], "default": 1024 },
             "uringReadBufferBytes": { "type": "integer", "minimum": 4096, "maximum": 1048576, "default": 65536 },
             "writeTimeoutMs": {
               "type": "integer", "minimum": 1, "maximum": 300000, "default": 10000,
-              "description": "TiangZ 0.7 起支持。出站批次从准入、排队到 TCP/WebSocket 完整写出的总期限；KCP 仅约束交给可靠传输前的排队。0.6.x 宿主不接受此字段。"
+              "description": "TiangZ 0.7 起支持。出站批次从 writer 准入、排队到 TCP/WebSocket 完整写出的总期限；主动 Inner 同时受操作期限约束。过期或部分写失败结束该字节流。KCP 仅约束交给可靠传输前的排队。0.6.x 宿主不接受此字段。"
             }
           }
         },
