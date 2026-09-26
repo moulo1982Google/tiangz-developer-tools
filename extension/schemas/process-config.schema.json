@@ -49,6 +49,10 @@
               "type": "integer", "minimum": 1, "maximum": 1073741824, "default": 67108864,
               "description": "TiangZ 0.7 起支持。当前 Process 的 ConnectionWriter payload 与主动 Inner Host 整包共享字节预算，覆盖复制后的待调度、排队与在途写出；广播按接收者、Inner 按整包保守累计。Writer 超限拒绝并关闭连接，Host 整包超限在复制/提交前拒绝。不含 RPC 响应、入站/V8、KCP 内部可靠缓存或整个进程内存。0.6.x 宿主不接受此字段。"
             },
+            "maxIngressBufferedBytes": {
+              "type": "integer", "minimum": 1, "maximum": 1073741824, "default": 67108864,
+              "description": "TiangZ 0.7 起支持。全部业务 listener 已解码 Rust Process 入站帧共享逻辑字节额度，包含 Inner RPC、等待帧数空位和热更延后帧；最后引用释放才归还。超限时 Inner RPC 返回入口过载，外部/单向来源关闭。Disconnect/Shutdown/Host completion 不占本项帧额度。不含解码器、Host 打包副本、V8/TS mailbox 或 KCP 可靠缓存。0.6.x 宿主不接受此字段。"
+            },
             "backend": { "type": "string", "enum": ["epoll", "io-uring"], "deprecationMessage": "请使用 ioBackend。" },
             "uringEntries": { "type": "integer", "enum": [64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768], "default": 1024 },
             "uringReadBufferBytes": { "type": "integer", "minimum": 4096, "maximum": 1048576, "default": 65536 },
