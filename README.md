@@ -161,7 +161,7 @@ node dist/tiangz-design.cjs --input .\DesignRequest.json
 
 生命周期与方法名 Timer 的类型规则由共享 Program 实现提供，CLI、主工程 LSP 与声明宿主的模块检查复用同一规则。动态无法证明的情况返回 warning；稳定诊断码、范围和缓存边界见[类型契约](docs/runtime-contracts.md)。事件和持久化 ID 的现有单文件规则继续保留。
 
-`tiangz.hotfix.instance-state`是错误级诊断。它覆盖直接导入、导入别名和命名空间导入，例如 `import { systemFor as bindSystem } ...` 与 `@model.systemFor(...)`；把缓存、TimerId 或其他长期状态写入行为类会在 VS Code Problems 中直接标红。请把状态放到对应的 Model Component/Entity，Handler 只保留参数校验和调用链编排。
+`tiangz.hotfix.instance-state` 是共享 Program ruleset 2 的错误级诊断。它按当前 Core 声明识别 System/Handler（含实体扩展），支持导入/转导出别名和 namespace；字段、构造和 static 成员在 CLI 与 VS Code Problems 中给出一致错误。同名业务函数与旧宿主不误判。没有类型环境时，仅对显式稳定入口的候选类显示 `tiangz.hotfix.unverifiable` 警告，不能冒充已通过检查。状态应放到 Model Component/Entity，Handler 保留参数校验和调用编排。
 
 ## 领域设计助手
 

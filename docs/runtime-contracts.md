@@ -1,6 +1,6 @@
-# 生命周期与 Timer 类型契约
+# 生命周期、Timer 与 Hotfix 类型契约
 
-唯一规则源为 `packages/project-core/src/runtimeContractRules.ts`，`RUNTIME_CONTRACT_RULESET_VERSION = 1`。`runtimeContractDiagnostics(program, { typescript, projectRoot, coreRoot, sourceFiles })` 在调用者已有 Program 上返回零基位置、稳定代码和等级。调用者必须传创建该 Program 的 TypeScript API；不能拿插件的 SyntaxKind 解释另一版本创建的节点。
+规则源为 `packages/project-core/src/runtimeContractRules.ts` 及其调用的 `hotfixStateRules.ts`，`RUNTIME_CONTRACT_RULESET_VERSION = 2`。`runtimeContractDiagnostics(program, { typescript, projectRoot, coreRoot, sourceFiles, hotfixSourceFiles })` 在调用者已有 Program 上返回零基位置、稳定代码和等级。调用者必须传创建该 Program 的 TypeScript API；不能拿插件的 SyntaxKind 解释另一版本创建的节点。
 
 | 诊断码 | 等级 | 范围 |
 | --- | --- | --- |
@@ -11,6 +11,10 @@
 | `tiangz.timer.argument-mismatch` | error | 一次回调传 args，取消回调传 args 与当前 Core 的 TimerCancelledContext，所有重载都不匹配 |
 | `tiangz.timer.unverifiable` | warning | 动态名称、any、未实例化泛型、无法识别接收者或复杂中间 rest 等不能静态证明的情况 |
 | `tiangz.contract.project-unavailable` | warning | 已配置工程的类型环境/缓存容量不足，类型契约没有完成检查 |
+| `tiangz.hotfix.instance-state` | error | 当前 Core 的 System/Handler（含实体扩展）声明字段、构造、static 块或 static 成员 |
+| `tiangz.hotfix.unverifiable` | warning | 显式稳定入口的候选行为类有受限成员，但缺少 Program 或当前装饰器类型证据 |
+
+Hotfix 成员规则仅识别当前 Core 声明，支持导入/转导出别名和 namespace；旧宿主或业务同名函数不当作框架装饰器。实例方法/accessor 允许，Model 状态类不因同名方法受限。默认 Program 范围为 `app/hotfix`（排除 bench）；模块 Host 按模块声明传 `hotfixSourceFiles`，不猜测目录约定。源码必须属于传入的 Program；另建语法树不能借用它的 checker 作证明。缺少类型环境时仅对 `#tiangz/model` 的显式候选导入发未证明 warning，主工程语法分析不再输出重复的确定性错误。依赖方向和模块级可变状态仍由其他入口负责。
 
 按当前宿主 Core 声明来源识别，支持继承、别名和 namespace 导入。同名普通工具类与其他宿主的 Core 不当作当前框架类型。Core 自身实现和 `.d.ts` 不作为业务诊断目标，声明文件仍完整参与类型解析。只含数值 `then` 的 DTO 不被当作 Promise。类方法和函数属性的生命周期实现受检，静态方法不受检。
 

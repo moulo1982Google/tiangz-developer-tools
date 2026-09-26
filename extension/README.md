@@ -35,6 +35,7 @@
 - 主工程生命周期/方法名 Timer 由共享 Program 规则检查实际 Core 类型、接收者和回调参数；CLI 与宿主模块检查复用规则。动态无法证明的写法给 warning。类型服务复用缓存，工程关闭时释放，匹配的 TypeScript 标准库随 VSIX 分发。模块实时检查复用已保存声明指定的 Host worker，包含既有源码未保存修改与联接真实路径；配置需保存后刷新。最多四个 worker，单工程 16 个模块，启动/检查各限 30 秒；关闭工程或撤销信任回收进程。实时诊断不代替 check/build 和锁验证。
 - Process配置JSON补全，以及StartMachine部署集合内`process.identity`唯一性诊断。
 - Timer回调、取消语义、同步/Veto Scene Event契约和持久化运行时ID诊断。
+- Hotfix 行为类字段、构造和 static 成员由共享 Program ruleset 2 检查，只识别当前宿主 Core 的 System/Handler 装饰器（含别名、namespace、实体扩展）。CLI 与 Problems 使用相同规则；同名业务函数不误判。缺少类型证据时明确给未验证警告，不能当作检查通过。
 - 普通`Unit`误加`@actor`、`ActorUnit`遗漏`@actor`的错误诊断。
 - GlobalId、InstanceId、Timer、协程锁、Veto Event与`scene.Tasks.Spawn`中文Hover。
 - `Unit`、`ActorUnit`与`UnitComponent`的创建、路由和mailbox边界Hover。

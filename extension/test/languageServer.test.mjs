@@ -17,7 +17,20 @@ test("CLI and actual LSP share typed contracts, unsaved changes and project cach
   const root = await mkdtemp(path.join(os.tmpdir(), "tiangz-contract-lsp-"));
   const rpc = new StdioRpc(serverPath);
   try {
-    for (const [relative, text] of Object.entries(projectFiles)) {
+    const hotfixSource = `import { systemFor as bind, Component } from "#tiangz/model";
+@bind(Component)
+export class BadSystem extends Component {
+  cache = 0;
+  static task() {}
+}`;
+    const files = { ...projectFiles,
+      "app/core/public.ts": projectFiles["app/core/public.ts"] + '\nexport declare function systemFor(...args: any[]): any;',
+      "app/hotfix/BadSystem.ts": hotfixSource,
+    };
+    const config = JSON.parse(files["tsconfig.json"]);
+    config.compilerOptions.paths = { "#tiangz/model": ["./app/core/public.ts"] };
+    files["tsconfig.json"] = JSON.stringify(config);
+    for (const [relative, text] of Object.entries(files)) {
       const file = path.join(root, relative);
       await mkdir(path.dirname(file), { recursive: true });
       await writeFile(file, text);
@@ -26,13 +39,17 @@ test("CLI and actual LSP share typed contracts, unsaved changes and project cach
     assert.equal(cli.status, 1, cli.stderr);
     const checked = JSON.parse(cli.stdout);
     assert.equal(checked.runtimeContracts.status, "checked");
-    assert.equal(checked.errors, 3, cli.stdout);
+    assert.equal(checked.runtimeContracts.ruleSetVersion, 2);
+    assert.equal(checked.errors, 5, cli.stdout);
+    assert.deepEqual(checked.diagnostics.filter(item => item.code.startsWith("tiangz.hotfix.")).map(item => [item.code, item.severity, item.location.line]), [
+      ["tiangz.hotfix.instance-state", "error", 3], ["tiangz.hotfix.instance-state", "error", 4],
+    ]);
     const rootUri = pathToFileURL(root).toString();
     const sourceUri = pathToFileURL(path.join(root, "app/model/Worker.ts")).toString();
     await rpc.request("initialize", { processId: null, rootUri, capabilities: {}, workspaceFolders: [{ uri: rootUri, name: "contracts" }] });
     rpc.notify("initialized", {});
     const first = rpc.waitForNotification("tiangzProject/snapshot", params => params.rootUri === rootUri);
-    rpc.notify("tiangzProject/indexFiles", { roots: [{ rootUri, uris: Object.keys(projectFiles).map(file => pathToFileURL(path.join(root, file)).toString()) }] });
+    rpc.notify("tiangzProject/indexFiles", { roots: [{ rootUri, uris: Object.keys(files).map(file => pathToFileURL(path.join(root, file)).toString()) }] });
     const snapshot = (await first).snapshot;
     assert.equal(snapshot.runtimeContracts?.status, "checked", JSON.stringify(snapshot.runtimeContracts));
     assert.deepEqual(snapshot.diagnostics, checked.diagnostics);
@@ -43,6 +60,7 @@ test("CLI and actual LSP share typed contracts, unsaved changes and project cach
     const fixed = contractSource.replace("async Awake()", "Awake()").replace('"Missing"', '"Tick"').replace('"wrong"', '{ value: 2 }');
     const update = rpc.waitForNotification("tiangzProject/snapshot", params => params.rootUri === rootUri && params.snapshot.runtimeContracts?.status === "checked" && params.snapshot.diagnostics.length === 0);
     open(rpc, sourceUri, fixed, 1);
+    open(rpc, pathToFileURL(path.join(root, "app/hotfix/BadSystem.ts")).toString(), hotfixSource.replace("  cache = 0;", "").replace("  static task() {}", "  task() {}"), 1);
     await update;
     const afterEdit = await rpc.request("tiangzProject/serverStats", null);
     assert.equal(afterEdit.cachedTypeProjects, 1);
@@ -142,7 +160,7 @@ export class LoginHandler implements SessionRpcHandler<LoginScene, LoginSession,
     const stateDiagnostics = rpc.waitForNotification(
       "textDocument/publishDiagnostics",
       (params) => params.uri === stateUri
-        && params.diagnostics.some((diagnostic) => diagnostic.code === "tiangz.hotfix.instance-state"),
+        && params.diagnostics.some((diagnostic) => diagnostic.code === "tiangz.hotfix.unverifiable"),
     );
     open(rpc, stateUri, `import { systemFor as bindSystem, Component } from "#tiangz/model";
 @bindSystem(Component)
@@ -151,11 +169,11 @@ export class StatefulSystem extends Component {
   constructor() {}
 }`, 1);
     const stateDiagnosticCodes = (await stateDiagnostics).diagnostics
-      .filter((diagnostic) => diagnostic.code === "tiangz.hotfix.instance-state")
-      .map((diagnostic) => diagnostic.code);
+      .filter((diagnostic) => diagnostic.code === "tiangz.hotfix.unverifiable")
+      .map((diagnostic) => [diagnostic.code, diagnostic.severity]);
     assert.deepEqual(stateDiagnosticCodes, [
-      "tiangz.hotfix.instance-state",
-      "tiangz.hotfix.instance-state",
+      ["tiangz.hotfix.unverifiable", 2],
+      ["tiangz.hotfix.unverifiable", 2],
     ]);
 
     const references = await rpc.request("textDocument/references", {

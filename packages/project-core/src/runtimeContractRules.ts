@@ -1,9 +1,10 @@
 import path from "node:path";
 import type ts from "typescript";
 import type { ProjectDiagnostic } from "./types.js";
+import { hotfixClassDiagnostics } from "./hotfixStateRules.js";
 
 /** 规则语义版本独立于框架发布号。 / Rule semantics version is independent of the framework version. */
-export const RUNTIME_CONTRACT_RULESET_VERSION = 1;
+export const RUNTIME_CONTRACT_RULESET_VERSION = 2;
 
 export interface RuntimeContractOptions {
   /** 必须使用创建 Program 的 TS 实例，避免跨版本 SyntaxKind。 / Use the API that created this Program. */
@@ -11,6 +12,8 @@ export interface RuntimeContractOptions {
   readonly projectRoot: string;
   readonly coreRoot: string;
   readonly sourceFiles?: readonly ts.SourceFile[];
+  /** 模块宿主按声明指定 Hotfix 范围；默认仅检查 app/hotfix（不含 bench）。 / Module hosts supply declared Hotfix roots; the default is app/hotfix excluding benchmarks. */
+  readonly hotfixSourceFiles?: readonly ts.SourceFile[];
 }
 
 type Compatibility = "yes" | "no" | "unknown";
@@ -28,9 +31,20 @@ export function runtimeContractDiagnostics(program: ts.Program, options: Runtime
   const contracts = new Map<ts.Type, ReadonlySet<string>>();
   const cancellationType = findCoreType("TimerCancelledContext");
 
-  for (const source of options.sourceFiles ?? program.getSourceFiles()) {
+  const sources = options.sourceFiles ?? program.getSourceFiles();
+  for (const source of sources) {
     if (source.isDeclarationFile || isCore(source)) continue;
     visit(source);
+  }
+  const hotfixSources = options.hotfixSourceFiles ?? sources.filter(source => {
+    const relative = path.relative(options.projectRoot, source.fileName).replaceAll("\\", "/");
+    return relative.startsWith("app/hotfix/") && !relative.includes("/bench/");
+  });
+  for (const source of hotfixSources) {
+    if (source.isDeclarationFile || isCore(source)) continue;
+    // 不能把另一个语法树配给本 Program 的 checker。 / Never pair a foreign syntax tree with this Program's checker.
+    const sourceChecker = program.getSourceFile(source.fileName) === source ? checker : undefined;
+    diagnostics.push(...hotfixClassDiagnostics(source, sourceChecker, options));
   }
   return diagnostics.sort((a, b) => a.location.relativePath.localeCompare(b.location.relativePath, "en")
     || a.location.line - b.location.line || a.location.character - b.location.character || a.code.localeCompare(b.code, "en"));

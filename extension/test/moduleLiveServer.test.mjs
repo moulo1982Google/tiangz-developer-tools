@@ -179,26 +179,40 @@ export class Probe extends Component {
   Tick(now = Date.now()): void { void now; }
 }`;
   await writeFile(file, source);
-  await writeFile(path.join(module, "src/hotfix/index.ts"), "export {};");
+  const hotfixFile = path.join(module, "src/hotfix/index.ts");
+  const hotfixSource = `import { systemFor as bind } from "#tiangz/model";
+import { Probe } from "#tiangz/module";
+@bind(Probe)
+export class ProbeSystem extends Probe {
+  state = 1;
+  Run() {}
+}`;
+  await writeFile(hotfixFile, hotfixSource);
   const cli = spawnSync(process.execPath, ["tools/typecheck_game_modules.mjs", "--modules-dir", path.join(project, "modules"), "--host-profile", "modules", "--json"], { cwd: engine, encoding: "utf8", windowsHide: true });
   assert.equal(cli.status, 1, cli.stderr);
   const expected = JSON.parse(cli.stdout).diagnostics.map(item => ({ code: item.code, severity: item.severity ?? "error", message: item.message,
     location: { relativePath: path.relative(project, item.file).replaceAll("\\", "/"), line: item.line - 1, character: item.column - 1 } }));
+  assert.equal(expected.filter(item => item.code === "tiangz.hotfix.instance-state").length, 1, cli.stdout);
   const rpc = await connect([project]);
   try {
     let next = snapshot(rpc, project, item => item.runtimeContracts?.status === "checked");
     index(rpc, [project], true);
     const baseline = (await next).snapshot;
     assert.match(baseline.runtimeContracts.typescriptVersion, /^6\./);
+    assert.equal(baseline.runtimeContracts.ruleSetVersion, 2);
     assert.deepEqual(baseline.diagnostics, expected);
     const initial = await stats(rpc);
-    assert.equal(rpc.notifications.find(item => item.method === "textDocument/publishDiagnostics" && item.params.uri === uri(file))?.params.diagnostics.length, expected.length);
+    for (const target of [file, hotfixFile]) {
+      const diagnosticCount = expected.filter(item => item.location.relativePath === path.relative(project, target).replaceAll("\\", "/")).length;
+      assert.equal(rpc.notifications.find(item => item.method === "textDocument/publishDiagnostics" && item.params.uri === uri(target))?.params.diagnostics.length, diagnosticCount);
+    }
     assert.equal(initial.moduleWorkers, 1);
     assert.ok(initial.moduleTypeFiles > 10);
     assert.equal(initial.cachedTypeProjects, 0);
     const fixed = source.replace("async Awake(): Promise<void>", "Awake(): void").replace('"Missing"', '"Tick"');
     next = snapshot(rpc, project, item => item.diagnostics.length === 1 && item.diagnostics[0].severity === "warning");
     open(rpc, file, fixed);
+    open(rpc, hotfixFile, hotfixSource.replace("  state = 1;", ""));
     await next;
     assert.equal((await stats(rpc)).moduleWorkerPids[0], initial.moduleWorkerPids[0]);
     next = snapshot(rpc, project, item => item.diagnostics.some(d => d.code === "TS2307"));
@@ -206,8 +220,10 @@ export class Probe extends Component {
     await next;
     next = snapshot(rpc, project, item => item.diagnostics.length === expected.length);
     close(rpc, file);
+    close(rpc, hotfixFile);
     assert.deepEqual((await next).snapshot.diagnostics, expected);
     assert.equal(await readFile(file, "utf8"), source);
+    assert.equal(await readFile(hotfixFile, "utf8"), hotfixSource);
     const config = path.join(module, "tsconfig.json");
     next = snapshot(rpc, project, item => item.runtimeContracts?.status === "unavailable");
     open(rpc, config, "{}");

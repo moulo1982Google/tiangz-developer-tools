@@ -757,7 +757,7 @@ export class PlayerUnit extends Unit {
   assert.deepEqual(warnings.map((diagnostic) => diagnostic.location.line), [2, 3, 4, 5, 10, 11]);
 });
 
-test("rejects state and constructors in Hotfix behavior classes", () => {
+test("marks Hotfix state as unverified when no Program is available", () => {
   const snapshot = analyzeTiangZProject([
     {
       relativePath: "app/hotfix/game/BadSystem.ts",
@@ -778,10 +778,10 @@ export class NamespaceSystem extends model.Component {
     },
   ]);
   const diagnostics = snapshot.diagnostics.filter(
-    (diagnostic) => diagnostic.code === "tiangz.hotfix.instance-state",
+    (diagnostic) => diagnostic.code === "tiangz.hotfix.unverifiable",
   );
   assert.equal(diagnostics.length, 3);
-  assert.ok(diagnostics.every((diagnostic) => diagnostic.severity === "error"));
+  assert.ok(diagnostics.every((diagnostic) => diagnostic.severity === "warning"));
   assert.deepEqual(diagnostics.map((diagnostic) => diagnostic.location.line), [3, 4, 3]);
 });
 
