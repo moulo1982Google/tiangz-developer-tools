@@ -2,6 +2,7 @@ import path from "node:path";
 import ts from "typescript";
 import { runtimeContractDiagnostics, RUNTIME_CONTRACT_RULESET_VERSION } from "./runtimeContractRules.js";
 import type { ProjectDiagnostic, ProjectSource } from "./types.js";
+import { programDependencyDiagnostics } from "./dependencyRules.js";
 
 export interface RuntimeContractProjectResult {
   readonly status: "checked" | "unavailable";
@@ -9,6 +10,7 @@ export interface RuntimeContractProjectResult {
   readonly typescriptVersion: string;
   readonly diagnostics: readonly ProjectDiagnostic[];
   readonly reason?: string;
+  readonly dependencyCheckedFiles?: readonly string[];
 }
 
 interface CachedScript {
@@ -70,6 +72,7 @@ export class RuntimeContractProject {
       }
       const files = program.getSourceFiles().filter(source => this.within(path.join(this.root, "app"), source.fileName));
       const diagnostics = runtimeContractDiagnostics(program, { typescript: this.api, projectRoot: this.root, coreRoot: path.join(this.root, "app/core"), sourceFiles: files });
+      diagnostics.push(...programDependencyDiagnostics(program, { typescript: this.api, projectRoot: this.root, sourceFiles: files }));
       // 不完整的导入/类型环境必须可见，不把没有命中的规则冒充完整检查。
       // Surface incomplete type environments instead of calling an empty rule result a complete check.
       const typeErrors = this.api.getPreEmitDiagnostics(program).filter(item => item.category === this.api.DiagnosticCategory.Error);
@@ -81,7 +84,8 @@ export class RuntimeContractProject {
           line: position?.line ?? 0, character: position?.character ?? 0,
         } });
       }
-      return { status: "checked", ruleSetVersion: RUNTIME_CONTRACT_RULESET_VERSION, typescriptVersion: this.api.version, diagnostics };
+      return { status: "checked", ruleSetVersion: RUNTIME_CONTRACT_RULESET_VERSION, typescriptVersion: this.api.version, diagnostics,
+        dependencyCheckedFiles: files.map(source => path.relative(this.root, source.fileName).replaceAll("\\", "/")) };
     } catch (error) {
       return unavailable(error instanceof Error ? error.message : String(error));
     }

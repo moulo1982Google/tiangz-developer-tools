@@ -215,8 +215,14 @@ export class ProbeSystem extends Probe {
     open(rpc, hotfixFile, hotfixSource.replace("  state = 1;", ""));
     await next;
     assert.equal((await stats(rpc)).moduleWorkerPids[0], initial.moduleWorkerPids[0]);
+    const internalCore = path.relative(path.dirname(file), path.join(engine, "app/core/runtime/entities")).replaceAll("\\", "/");
+    next = snapshot(rpc, project, item => item.diagnostics.some(d => d.code === "tiangz.architecture.invalid-dependency"));
+    change(rpc, file, fixed.replace("#tiangz/core", internalCore), 2);
+    const boundary = (await next).snapshot;
+    assert.equal(boundary.diagnostics.filter(item => item.code === "tiangz.architecture.invalid-dependency").length, 1);
+    assert.equal(boundary.diagnostics.find(item => item.code === "tiangz.architecture.invalid-dependency").location.relativePath, path.relative(project, file).replaceAll("\\", "/"));
     next = snapshot(rpc, project, item => item.diagnostics.some(d => d.code === "TS2307"));
-    change(rpc, file, fixed + '\nimport { Absent } from "./missing-dependency.js"; export type Missing = Absent;', 2);
+    change(rpc, file, fixed + '\nimport { Absent } from "./missing-dependency.js"; export type Missing = Absent;', 3);
     await next;
     next = snapshot(rpc, project, item => item.diagnostics.length === expected.length);
     close(rpc, file);

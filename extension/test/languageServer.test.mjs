@@ -25,10 +25,13 @@ export class BadSystem extends Component {
 }`;
     const files = { ...projectFiles,
       "app/core/public.ts": projectFiles["app/core/public.ts"] + '\nexport declare function systemFor(...args: any[]): any;',
+      "app/core/internal.ts": 'export interface Hidden { value: number }',
+      "app/model/public.ts": 'export * from "../core/public";',
+      "app/model/Worker.ts": contractSource + '\nimport type { Hidden } from "../core/internal";',
       "app/hotfix/BadSystem.ts": hotfixSource,
     };
     const config = JSON.parse(files["tsconfig.json"]);
-    config.compilerOptions.paths = { "#tiangz/model": ["./app/core/public.ts"] };
+    config.compilerOptions.paths = { "#tiangz/model": ["./app/model/public.ts"] };
     files["tsconfig.json"] = JSON.stringify(config);
     for (const [relative, text] of Object.entries(files)) {
       const file = path.join(root, relative);
@@ -40,7 +43,8 @@ export class BadSystem extends Component {
     const checked = JSON.parse(cli.stdout);
     assert.equal(checked.runtimeContracts.status, "checked");
     assert.equal(checked.runtimeContracts.ruleSetVersion, 2);
-    assert.equal(checked.errors, 5, cli.stdout);
+    assert.equal(checked.errors, 6, cli.stdout);
+    assert.equal(checked.diagnostics.filter(item => item.code === "tiangz.architecture.invalid-dependency").length, 1);
     assert.deepEqual(checked.diagnostics.filter(item => item.code.startsWith("tiangz.hotfix.")).map(item => [item.code, item.severity, item.location.line]), [
       ["tiangz.hotfix.instance-state", "error", 3], ["tiangz.hotfix.instance-state", "error", 4],
     ]);

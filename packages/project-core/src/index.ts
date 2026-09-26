@@ -1,5 +1,7 @@
 export { analyzeTiangZProject } from "./projectAnalyzer.js";
 export { businessTimeDiagnostics } from "./businessTimeRules.js";
+export { dependencyDiagnostics, programDependencyDiagnostics, DEPENDENCY_RULESET_VERSION } from "./dependencyRules.js";
+export type { DependencyRuleOptions, ModuleDependencyContext } from "./dependencyRules.js";
 export { runtimeContractDiagnostics, RUNTIME_CONTRACT_RULESET_VERSION } from "./runtimeContractRules.js";
 export type { RuntimeContractOptions } from "./runtimeContractRules.js";
 export { hotfixClassDiagnostics, restrictedHotfixDecoratorKind } from "./hotfixStateRules.js";

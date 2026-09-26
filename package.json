@@ -39,6 +39,7 @@
     "dist/tiangz-design-mcp.cjs",
     "dist/tiangz-design-mcp.cjs.map",
     "README.md",
+    "docs/v0.7-dependency-rules.md",
     "LICENSE",
     "NOTICE"
   ],

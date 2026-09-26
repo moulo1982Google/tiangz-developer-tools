@@ -8,6 +8,8 @@ TiangZ 框架的工程模型、静态检查与 VS Code 开发工具。
 
 ## 当前能力
 
+- Model/Hotfix/Stable 依赖方向使用共享 dependency ruleset 1，宿主边界命令与模块 Host worker 可复用；检查 import/export、import-type、import-equals 和字面量动态导入，计算目标给未证明 warning。当前 Program 解析路径别名，Model 深入 Core 会报错；精确启动桥接、生成协议 ABI 和领域 System 增补保留窄例外。CLI/实际 LSP 同源，详见 [依赖规则](docs/v0.7-dependency-rules.md)。
+
 - 新增模块入门工程向导与 doctor/setup/check/build/host-build 操作入口，调用宿主 project:create/game_project 通用工具；任务以独立参数执行，支持带空格路径。存在 `tiangz.project.json` 时优先读取其宿主路径，完整配置校验仍由宿主执行。
 
 - 提供独立“TiangZ 模块”导航树，由所选 TiangZ 宿主 `tools/inspect_game_modules.mjs --json` 提供入口、状态类型、System/Handler 绑定、直接依赖和疑似漏加载提示；插件不复制模块解析与兼容规则。需要支持该命令的宿主（当前 0.6 开发线），不会因为版本号相同就假定工具已存在。

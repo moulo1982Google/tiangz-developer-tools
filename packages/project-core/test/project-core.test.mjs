@@ -654,7 +654,7 @@ test("allows model, hotfix, business and generated composition dependencies", ()
   const snapshot = analyzeTiangZProject([
     {
       relativePath: "app/model/Player.ts",
-      text: `import { Entity } from "../core/runtime";
+      text: `import { Entity } from "../core/public";
 import { NativeUnitRef } from "../generated/model/native/NativeUnitRef";`,
     },
     {

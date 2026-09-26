@@ -83,6 +83,8 @@ export function analyzeTiangZProject(sources: readonly ProjectSource[], runtimeC
   const diagnostics: ProjectDiagnostic[] = [];
   const lifecycleModels: LifecycleModelContract[] = [];
   const lifecycleSystems: LifecycleSystemContract[] = [];
+  const dependencyKey = (file: string) => ts.sys.useCaseSensitiveFileNames ? file : file.toLowerCase();
+  const checkedDependencies = new Set((runtimeContracts?.dependencyCheckedFiles ?? []).map(dependencyKey));
   const manifestText = sources.find(
     (source) => normalizePath(source.relativePath) === "codegen.manifest.json",
   )?.text;
@@ -101,6 +103,7 @@ export function analyzeTiangZProject(sources: readonly ProjectSource[], runtimeC
         lifecycleModels,
         lifecycleSystems,
         runtimeContracts?.status !== "checked",
+        !checkedDependencies.has(dependencyKey(relativePath)),
       );
     } else if (relativePath.startsWith("configs/") && relativePath.endsWith(".json")) {
       analyzeConfig({ ...source, relativePath }, processes, machines, diagnostics);
@@ -357,6 +360,7 @@ function analyzeTypeScript(
   lifecycleModels: LifecycleModelContract[],
   lifecycleSystems: LifecycleSystemContract[],
   hotfixAdvisories: boolean,
+  dependencyAdvisories: boolean,
 ): void {
   const sourceFile = ts.createSourceFile(
     source.relativePath,
@@ -378,7 +382,7 @@ function analyzeTypeScript(
     });
   }
   analyzeGeneratedProtocol(sourceFile, source.relativePath, messageTypes, msgcodes, protocols);
-  validateTypeScriptDependencies(sourceFile, source.relativePath, diagnostics);
+  if (dependencyAdvisories) validateTypeScriptDependencies(sourceFile, source.relativePath, diagnostics);
   validateRuntimeShapeStability(sourceFile, source.relativePath, diagnostics);
   if (hotfixAdvisories && source.relativePath.startsWith("app/hotfix/") && !source.relativePath.includes("/bench/")) {
     diagnostics.push(...hotfixClassDiagnostics(sourceFile, undefined, {

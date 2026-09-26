@@ -34,7 +34,7 @@ export const projectFiles = {
   "app/model/Worker.ts": contractSource,
 };
 
-export function createFixtureProgram(source, extra = {}, api = ts) {
+export function createFixtureProgram(source, extra = {}, api = ts, compilerOptions = {}) {
   const root = path.resolve("runtime-contract-fixture");
   const files = new Map(Object.entries({ "app/core/public.ts": coreSource, "app/model/Test.ts": source, ...extra })
     .map(([name, text]) => [path.resolve(root, name), text]));
@@ -49,6 +49,6 @@ export function createFixtureProgram(source, extra = {}, api = ts) {
     const text = host.readFile(file);
     return text === undefined ? undefined : api.createSourceFile(file, text, languageVersion, true);
   };
-  const program = api.createProgram([...files.keys()], { target: api.ScriptTarget.ES2022, module: api.ModuleKind.ESNext, moduleResolution: api.ModuleResolutionKind.Bundler, strict: true, noEmit: true }, host);
+  const program = api.createProgram([...files.keys()], { target: api.ScriptTarget.ES2022, module: api.ModuleKind.ESNext, moduleResolution: api.ModuleResolutionKind.Bundler, strict: true, noEmit: true, ...compilerOptions }, host);
   return { program, options: { typescript: api, projectRoot: root, coreRoot: path.join(root, "app/core") } };
 }
