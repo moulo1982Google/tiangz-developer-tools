@@ -90,7 +90,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   const debugConfigStorage = context.storageUri ?? context.globalStorageUri;
   const designAssistantSubscriptions = registerDesignAssistant(context);
 
-  const refresh = async (): Promise<void> => {
+  const refresh = async (reloadModules = false): Promise<void> => {
     const folders = await discoverProjectFolders(vscode.workspace.workspaceFolders ?? []);
     discoveries = await Promise.all(folders.map(discoverWorkspaceFolder));
     const activeRoots = new Set(discoveries.map((project) => project.folder.uri.toString()));
@@ -98,6 +98,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     tree.setProjects(projects);
     if (client) {
       await client.sendNotification(INDEX_FILES_NOTIFICATION, {
+        trusted: vscode.workspace.isTrusted,
+        reloadModules,
         roots: discoveries.map((project) => ({
           rootUri: project.folder.uri.toString(),
           uris: project.sourceUris.map((uri) => uri.toString()),
@@ -113,8 +115,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   const watchers = [
     vscode.workspace.createFileSystemWatcher("**/tsconfig*.json"),
     vscode.workspace.createFileSystemWatcher("**/tiangz.project.json"),
+    vscode.workspace.createFileSystemWatcher("**/tiangz.module.json"),
+    vscode.workspace.createFileSystemWatcher("**/*.ts"),
     vscode.workspace.createFileSystemWatcher("**/configs/**/*.json"),
-    vscode.workspace.createFileSystemWatcher("**/app/**/*.ts"),
     vscode.workspace.createFileSystemWatcher("**/codegen.manifest.json"),
     vscode.workspace.createFileSystemWatcher("**/codegen.config.json"),
     vscode.workspace.createFileSystemWatcher("**/package.json"),
@@ -134,7 +137,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     },
   };
   const clientOptions: LanguageClientOptions = {
-    documentSelector: [{ scheme: "file", language: "typescript" }],
+    documentSelector: [{ scheme: "file", language: "typescript" },
+      { scheme: "file", pattern: "**/{tiangz.project.json,tiangz.module.json,tsconfig*.json}" }],
     synchronize: { fileEvents: watchers },
     outputChannelName: "TiangZ 工程语言服务器",
   };
@@ -180,10 +184,11 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     snapshotSubscription,
     ...designAssistantSubscriptions,
     vscode.workspace.onDidChangeWorkspaceFolders(scheduleRefresh),
+    vscode.workspace.onDidGrantWorkspaceTrust(scheduleRefresh),
     vscode.workspace.onDidChangeConfiguration((event) => {
       if (event.affectsConfiguration("tiangzDeveloperTools")) scheduleRefresh();
     }),
-    vscode.commands.registerCommand("tiangzDeveloperTools.refreshProject", () => refresh().catch(showError)),
+    vscode.commands.registerCommand("tiangzDeveloperTools.refreshProject", () => refresh(true).catch(showError)),
     vscode.commands.registerCommand("tiangzDeveloperTools.openLocation", (node: ProjectNode) => openLocation(node, projects)),
     vscode.commands.registerCommand("tiangzDeveloperTools.openUriLocation", openUriLocation),
     vscode.commands.registerCommand("tiangzDeveloperTools.showProjectSummary", () => showSummary(projects)),

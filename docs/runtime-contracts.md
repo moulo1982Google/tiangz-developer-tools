@@ -24,8 +24,14 @@ LSP 最多保留 4 个工程类型缓存；每个缓存最多 10000 文件、128
 
 VSIX 带与其编译器同版本的标准库与授权文本，`build-info.json` 记录版本及每份标准库哈希。不能只验证仓库内运行成功而遗漏实际安装包。
 
-独立模块仍由明确声明的宿主 `check` / `modules:typecheck` 提供 Program，强制当前宿主的 Core 和生成声明；旧 CLI 不猜测模块宿主。模块编辑器已有的宿主任务把确定错误定位到 Problems；模块源码的完整实时 Program 检查尚未接入旧 LSP，不把主工程 overlay 验证当作模块实时验收。
+独立模块由已保存 `tiangz.project.json` 选择宿主。受信任工作区中的 LSP 启动该宿主 `module_live_worker.mjs`，与 `check` / `modules:typecheck` 复用同一检查入口、宿主 TypeScript、当前 Core 与生成 System 声明；旧 CLI 不猜测模块宿主。模块已有 `.ts` 文件的未保存内容在内存中替换，关闭文档恢复磁盘，联接模块可从真实路径打开。Problems 使用宿主实际文件路径，包括 Windows 跨盘模块。检查不运行生成器、构建或业务代码。
+
+最多四个模块 worker，每个最多 16 个模块 Program、10000 份源文件/128 MiB 源文本；这与主工程 LanguageService 缓存分别计数。未保存文件最多 256 个、单文件 2 MiB，请求与回复分别限 16 MiB，启动/检查各限 30 秒。只接受宿主目录集合内的既有 TS 文件，untitled/new-file 需先保存。请求去抖并合并为最新版本，旧结果丢弃。工程关闭、信任撤销、进程故障或服务 shutdown 回收子进程；统计提供 moduleWorkers/moduleWorkerPids/moduleTypeFiles。
+
+未保存项目/模块声明与 tsconfig 显示 `tiangz.module.live-unavailable`，不能据编辑缓冲区启动另一宿主。宿主过旧、缺依赖、配置损坏、资源超限或超时同样明确不可用；可保存配置后执行“TiangZ：刷新工程”。更换宿主工具或依赖后也须刷新。自定义规则只覆盖共享入口实际执行的类型/生命周期/Timer/时间等待/bridge/Hotfix 形状检查，不代替完整构建、生成锁或所有依赖方向检查。外置模块规则仍由 Host 实现，插件不复制它们。
 
 CLI 普通运行只因 error 失败；`--warnings-as-errors` 可提升 warning。宿主 CLI 同样区分错误与未证明提示。CI 必须调用这些本地命令，普通 `tsc` 不自动运行自定义规则。JSON 的 runtimeContracts 标明是否检查及 TS/规则版本；没有完整工程环境时文本明确显示“类型契约未检查”。
 
 验证包含正反例的 Core 测试、真实 CLI/LSP 对同一工程逐诊断比较、未保存修改与项目关闭；宿主用自己的 TS 6 Program 验证当前 Core、旧宿主隔离、生成方法、同名取消上下文与 warning 的退出语义。
+
+模块联验：设置 `TIANGZ_TEST_MODULE_HOST` 为候选宿主绝对路径后运行 `node --test extension/test/moduleLiveServer.test.mjs`（先构建扩展）。未指定宿主时，真实编译器用例明确 skip，其余 IPC 夹具只验证调度、信任、故障和回收，不冒充编译器检查。`TIANGZ_TEST_SERVER_PATH` 可指向实际安装 VSIX 的 server.cjs 复验。

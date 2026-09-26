@@ -65,9 +65,12 @@ export function analyzeTiangZProject(sources: readonly ProjectSource[], runtimeC
   // 文件存在即委托宿主，损坏的声明也不能静默回退主工程规则。 / Never fall back on malformed module descriptors.
   if (sources.some((source) => normalizePath(source.relativePath) === "tiangz.project.json")) {
     return { analysisMode: "host-delegated", environments: [], processes: [], machines: [], declarations: [],
-      messageTypes: [], msgcodes: [], protocols: [], handlers: [], generators: [], diagnostics: sources
+      messageTypes: [], msgcodes: [], protocols: [], handlers: [], generators: [],
+      ...(runtimeContracts ? { runtimeContracts: { status: runtimeContracts.status, ruleSetVersion: runtimeContracts.ruleSetVersion,
+        typescriptVersion: runtimeContracts.typescriptVersion, ...(runtimeContracts.reason ? { reason: runtimeContracts.reason } : {}) } } : {}),
+      diagnostics: [...(runtimeContracts?.diagnostics ?? []), ...(runtimeContracts?.status === "checked" ? [] : sources
         .filter(source => /(?:^|\/)src\/(?:model|hotfix)\//.test(normalizePath(source.relativePath)))
-        .flatMap(source => businessTimeDiagnostics(source.text, source.relativePath)) };
+        .flatMap(source => businessTimeDiagnostics(source.text, source.relativePath)))] };
   }
   const processes: ProcessConfigModel[] = [];
   const machines: MachineConfigModel[] = [];

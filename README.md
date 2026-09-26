@@ -35,7 +35,7 @@ TiangZ 框架的工程模型、静态检查与 VS Code 开发工具。
 - 在“TiangZ 工程”树和命令面板提供“TiangZ：新建 Component”，与 CLI 使用同一套生成和冲突校验逻辑。
 - 在“TiangZ 工程”树和命令面板提供“TiangZ：运行快速工程检查”，调用主工程的 `npm run verify:fast`，不启动服务器、不做压力测试。
 - 从工程树、命令面板或 Proto/Native 文件右键菜单定向运行 Manifest 中的生成器。
-- 独立 Language Server 使用 150ms 防抖，不保留 TypeScript AST，并提供运行状态指标。
+- 独立 Language Server 使用 150ms 防抖，类型检查复用有界 Program/LanguageService 缓存，并提供运行状态指标。
 - 从工程树、原生资源管理器或命令面板运行、调试、停止和重启单个 Process。
 - 将 StartMachine 的 Process 展开为独立 VS Code Task，可分别查看 PID、日志和状态。
 - 自动执行 TypeScript/Cargo 构建，直接运行 Cargo 产出的 TiangZ executable。
@@ -119,7 +119,7 @@ node dist/tiangz-design.cjs --input .\DesignRequest.json
 
 可选真实编辑器测试入口为 `extension/test/editor/index.cjs`，不在默认 Node 单测中运行。按 [VS Code 扩展测试入口](https://code.visualstudio.com/api/working-with-extensions/testing-extension) 使用 `--extensionDevelopmentPath=<本仓库>/extension` 和 `--extensionTestsPath=<本仓库>/extension/test/editor/index.cjs`，并指定一次性教学工程、独立 `--user-data-dir`、独立 `--extensions-dir` 和 `--disable-extensions`。先由用户在该隔离配置中显式信任测试工程，再运行测试；测试不会关闭或绕过工作区信任。它验证扩展激活、真实任务诊断位置及两次错误/恢复轮次，不启动游戏或写业务源码。2026-09-16 本机尝试在信任检查处停止，因此不记为真实 Problems 刷新验收通过。
 
-存在根目录 `tiangz.project.json` 时，“TiangZ 工程”树转为模块导航与宿主检查入口，不再用只认识 `app/` 的旧索引扫描模块配置，也不显示旧主工程 Process 启动入口。声明损坏同样不会静默回退；由宿主检查给出修复错误。旧 CLI `tiangz-check-project` 明确拒绝独立模块工程，请使用工程内 `npm run check`。模块源码的实时语义诊断未在旧 LSP 中实现；宿主检查任务仍将错误定位到 Problems 面板。
+存在根目录 `tiangz.project.json` 时，“TiangZ 工程”树转为模块导航与宿主检查入口，不再用只认识 `app/` 的旧索引扫描模块配置，也不显示旧主工程 Process 启动入口。声明损坏同样不会静默回退；由宿主检查给出修复错误。旧 CLI `tiangz-check-project` 明确拒绝独立模块工程，请使用工程内 `npm run check`。受信任工作区的模块实时检查通过已保存声明选择 Host worker，复用宿主 Program；未保存 TS 修正、关闭恢复与跨盘联接模块可在 Problems 验证。宿主不支持、配置未保存或检查超限时明确提示不可用，仍可执行宿主检查任务；详见[类型契约](docs/runtime-contracts.md)。
 
 默认配置适用于 TiangZ 主仓库：
 
@@ -197,4 +197,4 @@ TiangZ Developer Tools 使用 [Apache License 2.0](LICENSE) 开源，版权归 2
 
 业务 Model/Hotfix 禁止 `await sleep/delay/TimerSystem.WaitAsync`、原生 `setTimeout/setInterval/setImmediate` 与定时器 Promise 包装；延迟、倒计时和周期事件必须走所有者 `NewOnceTimer/NewRepeatedTimer` 方法名回调。数据库/RPC/锁结果等待仍允许。错误码为 `tiangz.timer.time-wait-forbidden`，常见导入与局部函数别名也检查。
 
-检查实现 `businessTimeDiagnostics` 同时供主工程编辑器/CLI 和 TiangZ 模块构建使用。模块编辑器对已打开的标准 `src/model`/`src/hotfix` 文件给出实时错误；完整与自定义目录检查仍运行宿主 `check`/`modules:typecheck`，以 manifest 为准。任意动态或跨文件时间封装仍须审查，不得绕过规范。Runtime、测试与运维工具不作为业务模板。
+检查实现 `businessTimeDiagnostics` 同时供主工程编辑器/CLI 和 TiangZ 模块构建使用。模块实时 worker 按宿主 manifest 的源码根检查当前 Program；不支持 worker 的旧宿主仍只有标准源码目录的已打开文件时间规则，需要运行宿主 `check`/`modules:typecheck`。任意动态或跨文件时间封装仍须审查，不得绕过规范。Runtime、测试与运维工具不作为业务模板。

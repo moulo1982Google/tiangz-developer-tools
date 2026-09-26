@@ -2,7 +2,7 @@
 
 0.7 配套候选继续使用 Developer Tools 自身的 0.15.2 版本序列。实际包内 `dist/build-info.json` 记录扩展/Core 版本与运行 bundle 哈希；工作树名称不代表插件版本，也不代表已经安装。Process Schema 新增完整 network 字段及 0.7 的 writeTimeoutMs、maxAcceptedConnections、maxPendingHandshakes 提示，包含 Rust 同步的整数范围与默认值；这些字段不适用于 0.6.x 宿主，不会自动写入旧工程配置。入站连接与握手额度由当前 Process 全部业务 listener 共享，不代表帧字节或 KCP 未确认缓存上限。
 
-打开 TiangZ 主工程的上层目录也可以使用工程树和“TiangZ：创建模块入门工程”：插件识别当前目录及直属子目录，不扫描更深层或缓存目录；多个宿主会要求选择。创建确认框显示宿主和目标目录，目标相对当前打开的目录解析。已有 engineRoot 配置或 tiangz.project.json 声明优先，不会在配置错误时暗中切换宿主。独立模块的实时语义检查仍由宿主工具负责。
+打开 TiangZ 主工程的上层目录也可以使用工程树和“TiangZ：创建模块入门工程”：插件识别当前目录及直属子目录，不扫描更深层或缓存目录；多个宿主会要求选择。创建确认框显示宿主和目标目录，目标相对当前打开的目录解析。已有 engineRoot 配置或 tiangz.project.json 声明优先，不会在配置错误时暗中切换宿主。独立模块实时检查在受信任工作区启动所选宿主的只读 worker，与宿主 CLI 共用 Program 检查入口。
 
 ## 独立模块导航
 
@@ -14,7 +14,7 @@
 
 在可信工作区执行“TiangZ：读取模块结构”，即可从“TiangZ 模块”树查看入口、直接依赖、公开 API、状态类型与行为绑定，并跳转源码。独立工程请设置 `tiangzDeveloperTools.engineRoot` 指向 TiangZ 宿主，`tiangzDeveloperTools.modulesDirectory` 默认为 `modules`（均相对当前工作区）。宿主须提供 `tools/inspect_game_modules.mjs`。
 
-模块导航只呈现宿主通用工具的静态结果；不会运行游戏、Cargo、代码生成或自动修复。首次和源码变化后请显式刷新。未静态加载提示不等于运行错误，动态注册需另行验证。发现根目录 `tiangz.project.json` 后，原工程树改为模块导航与宿主检查入口，旧 app/ 索引不再误报入口 Scene 缺失。已打开的标准 `src/model`/`src/hotfix` 文件新增时间等待实时错误，其余模块语义与自定义源码根仍运行宿主 check 并查看 Problems。
+模块导航只呈现宿主通用工具的静态结果；不会运行游戏、Cargo、代码生成或自动修复。首次和源码变化后请显式刷新。未静态加载提示不等于运行错误，动态注册需另行验证。发现根目录 `tiangz.project.json` 后，原工程树改为模块导航与宿主检查入口，旧 app/ 索引不再误报入口 Scene 缺失。受信任工作区对宿主声明的源码根执行实时 Program 检查，既有 TS 未保存内容只覆盖内存，关闭恢复磁盘。宿主过旧或类型环境不可用会显示提示；原有时间规则仍可为已打开的标准源码目录给出局部诊断。
 
 ### 禁止 await 时间
 
@@ -32,7 +32,7 @@
 - 重复 Handler、缺失 Handler、RPC 类型不匹配、工程依赖方向与配置错误诊断。
 - Generated 过期、缺失、遗留与手工修改诊断。
 - Model声明的生命周期与迁移能力缺失System、方法或同步实现时发布错误诊断。
-- 主工程生命周期/方法名 Timer 由共享 Program 规则检查实际 Core 类型、接收者和回调参数；CLI 与宿主模块检查复用规则。动态无法证明的写法给 warning。类型服务复用缓存，工程关闭时释放，匹配的 TypeScript 标准库随 VSIX 分发。模块完整实时 Program 检查仍由现有宿主检查任务承接，不能把未保存模块修改当作已经验证。
+- 主工程生命周期/方法名 Timer 由共享 Program 规则检查实际 Core 类型、接收者和回调参数；CLI 与宿主模块检查复用规则。动态无法证明的写法给 warning。类型服务复用缓存，工程关闭时释放，匹配的 TypeScript 标准库随 VSIX 分发。模块实时检查复用已保存声明指定的 Host worker，包含既有源码未保存修改与联接真实路径；配置需保存后刷新。最多四个 worker，单工程 16 个模块，启动/检查各限 30 秒；关闭工程或撤销信任回收进程。实时诊断不代替 check/build 和锁验证。
 - Process配置JSON补全，以及StartMachine部署集合内`process.identity`唯一性诊断。
 - Timer回调、取消语义、同步/Veto Scene Event契约和持久化运行时ID诊断。
 - 普通`Unit`误加`@actor`、`ActorUnit`遗漏`@actor`的错误诊断。
