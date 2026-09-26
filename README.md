@@ -1,5 +1,7 @@
 # TiangZ Developer Tools
 
+本地 0.7 联合候选：共享 Core `0.16.1-rc.1`，VSIX `0.16.1`。预发行 VSIX 在 `npm run build:extension` 后通过 `node tools/package-extension.mjs --pre-release` 打包；tag、包文件名、包内版本与 SHA256 分别记录。候选未 push、未发布。此前验收使用的旧版本身份保留在历史记录中。
+
 打开多个仓库的上层目录时，“TiangZ 工程”树会识别当前目录或直属子目录中的主工程（app/core/public.ts + package.json）与独立工程声明（tiangz.project.json），按真实工程根分别索引，不递归扫描缓存、链接或更深层目录。“创建模块入门工程”也支持在直属子目录寻找宿主；多个候选需选择，显式 engineRoot/工程声明错误不会静默回退。创建前显示宿主与目标路径，目标相对当前打开的目录解析。子工程任务归属已打开的工作区，但命令在真实子工程目录执行。
 
 TiangZ 框架的工程模型、静态检查与 VS Code 开发工具。

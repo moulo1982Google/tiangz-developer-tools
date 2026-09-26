@@ -4,6 +4,8 @@ import { spawn } from "node:child_process";
 
 const extensionRoot = path.resolve(import.meta.dirname, "..", "extension");
 const repositoryRoot = path.resolve(extensionRoot, "..");
+const options = process.argv.slice(2);
+if (options.some(option => option !== "--pre-release")) throw new Error("Only --pre-release is supported");
 const packageJson = JSON.parse(
   await readFile(path.join(extensionRoot, "package.json"), "utf8"),
 );
@@ -20,6 +22,7 @@ await new Promise((resolve, reject) => {
     vsceCli,
     "package",
     "--no-dependencies",
+    ...options,
     "--out",
     output,
   ], {
