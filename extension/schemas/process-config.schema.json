@@ -32,6 +32,40 @@
           "additionalProperties": false,
           "description": "GlobalId 生成槽位；同一 StartMachine 部署集合内必须唯一。"
         },
+        "network": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "ioBackend": { "type": "string", "enum": ["epoll", "io-uring"], "default": "epoll" },
+            "maxAcceptedConnections": {
+              "type": "integer", "minimum": 1, "maximum": 1000000, "default": 65536,
+              "description": "TiangZ 0.7 起支持。当前 Process 全部业务监听端口共享的已接受连接上限，包含未完成握手；KCP 在 cookie 校验后计入会话。超限立即拒绝，不排队。0.6.x 宿主不接受此字段。"
+            },
+            "maxPendingHandshakes": {
+              "type": "integer", "minimum": 1, "maximum": 1000000, "default": 1024,
+              "description": "TiangZ 0.7 起支持。当前 Process 全部流式业务监听端口共享的未完成握手上限；成功、失败或取消后归还名额。KCP 的无状态握手不占用此名额。0.6.x 宿主不接受此字段。"
+            },
+            "maxOutboundBufferedBytes": {
+              "type": "integer", "minimum": 1, "maximum": 1073741824, "default": 67108864,
+              "description": "TiangZ 0.7 起支持。当前 Process 的 ConnectionWriter payload 与主动 Inner Host 整包共享字节预算，覆盖复制后的待调度、排队与在途写出；广播按接收者、Inner 按整包保守累计。Writer 超限拒绝并关闭连接，Host 整包超限在复制/提交前拒绝。不含 RPC 响应、入站/V8、KCP 内部可靠缓存或整个进程内存。0.6.x 宿主不接受此字段。"
+            },
+            "maxIngressBufferedBytes": {
+              "type": "integer", "minimum": 1, "maximum": 1073741824, "default": 67108864,
+              "description": "TiangZ 0.7 起支持。全部业务 listener 已解码 Rust Process 入站帧共享逻辑字节额度，包含 Inner RPC、等待帧数空位和热更延后帧；最后引用释放才归还。超限时 Inner RPC 返回入口过载，外部/单向来源关闭。Disconnect/Shutdown/Host completion 不占本项帧额度。不含解码器、Host 打包副本、V8/TS mailbox 或 KCP 可靠缓存。0.6.x 宿主不接受此字段。"
+            },
+            "maxKcpBufferedBytes": {
+              "type": "integer", "minimum": 1, "maximum": 1073741824, "default": 67108864,
+              "description": "TiangZ 0.7 起支持。全部 KCP listener 共享的保守 C 缓存/输出字节额度，覆盖发送接收段、未确认数据、ACK 保留容量和最后一个输出引用；每 Session 另限 4 MiB。扩容前预留，纯 ACK 在满额度时仍可释放缓存；超限或输出回调失败只关闭对应 Session。不是进程总内存，不含接收/UDP 封包副本、Rust 容器或 V8。0.6.x 宿主不接受此字段。"
+            },
+            "backend": { "type": "string", "enum": ["epoll", "io-uring"], "deprecationMessage": "请使用 ioBackend。" },
+            "uringEntries": { "type": "integer", "enum": [64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768], "default": 1024 },
+            "uringReadBufferBytes": { "type": "integer", "minimum": 4096, "maximum": 1048576, "default": 65536 },
+            "writeTimeoutMs": {
+              "type": "integer", "minimum": 1, "maximum": 300000, "default": 10000,
+              "description": "TiangZ 0.7 起支持。出站批次从 writer 准入、排队到 TCP/WebSocket 完整写出的总期限；主动 Inner 同时受操作期限约束。过期或部分写失败结束该字节流。KCP 仅约束交给可靠传输前的排队。0.6.x 宿主不接受此字段。"
+            }
+          }
+        },
         "debug": {
           "type": "object",
           "properties": {
@@ -215,14 +249,16 @@
           "description": "端点面向内网、外网或混合流量。"
         },
         "staticMapIds": {
+          "deprecated": true,
           "type": "array",
           "items": { "type": "integer", "minimum": 1 },
           "uniqueItems": true,
-          "description": "MapHost启动时固定创建的静态地图配置ID；空数组表示不承载静态地图。"
+          "description": "旧版 MapHost 静态地图部署字段。0.7 改用 MMORPG 模块部署数据包；过渡期显式双写必须与模块值一致，冲突拒绝启动。旧部署仍支持本字段。"
         },
         "acceptDynamicMaps": {
+          "deprecated": true,
           "type": "boolean",
-          "description": "MapHost是否注册MapManager并接受动态副本分配。"
+          "description": "旧版 MapHost 动态地图开关。0.7 改用 MMORPG 模块部署数据包；过渡期显式双写必须一致，缺失时保留旧默认 false。旧部署仍支持本字段。"
         }
       },
       "additionalProperties": true

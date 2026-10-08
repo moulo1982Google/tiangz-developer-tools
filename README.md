@@ -1,4 +1,8 @@
+> 本轮发布：`v0.7.0-rc1`，从 `feat/v0.7` 合入主线的预发行版本。历史 RC 标签、测试资格和制品保持原身份；本次发布后验证计划见 [RELEASE-v0.7.0-rc1.md](RELEASE-v0.7.0-rc1.md)。
+
 # TiangZ Developer Tools
+
+本地 0.7 联合候选：共享 Core `0.16.1-rc.2`，VSIX `0.16.2`。预发行 VSIX 在 `npm run build:extension` 后通过 `node tools/package-extension.mjs --pre-release` 打包；tag、包文件名、包内版本与 SHA256 分别记录。候选未 push、未发布。RC2 修复 MCP 握手版本并补齐独立分发的依赖许可证/构建哈希；RC1 tag 和旧制品仍保留。
 
 打开多个仓库的上层目录时，“TiangZ 工程”树会识别当前目录或直属子目录中的主工程（app/core/public.ts + package.json）与独立工程声明（tiangz.project.json），按真实工程根分别索引，不递归扫描缓存、链接或更深层目录。“创建模块入门工程”也支持在直属子目录寻找宿主；多个候选需选择，显式 engineRoot/工程声明错误不会静默回退。创建前显示宿主与目标路径，目标相对当前打开的目录解析。子工程任务归属已打开的工作区，但命令在真实子工程目录执行。
 
@@ -7,6 +11,8 @@ TiangZ 框架的工程模型、静态检查与 VS Code 开发工具。
 这个插件不替代 TypeScript，也不负责 `.native` 语言支持。它关注 TiangZ 特有的 Process、Scene、Session、Unit、Component、Handler 和启动配置之间的关系。
 
 ## 当前能力
+
+- Model/Hotfix/Stable 依赖方向使用共享 dependency ruleset 1，宿主边界命令与模块 Host worker 可复用；检查 import/export、import-type、import-equals 和字面量动态导入，计算目标给未证明 warning。当前 Program 解析路径别名，Model 深入 Core 会报错；精确启动桥接、生成协议 ABI 和领域 System 增补保留窄例外。CLI/实际 LSP 同源，详见 [依赖规则](docs/v0.7-dependency-rules.md)。
 
 - 新增模块入门工程向导与 doctor/setup/check/build/host-build 操作入口，调用宿主 project:create/game_project 通用工具；任务以独立参数执行，支持带空格路径。存在 `tiangz.project.json` 时优先读取其宿主路径，完整配置校验仍由宿主执行。
 
@@ -35,7 +41,7 @@ TiangZ 框架的工程模型、静态检查与 VS Code 开发工具。
 - 在“TiangZ 工程”树和命令面板提供“TiangZ：新建 Component”，与 CLI 使用同一套生成和冲突校验逻辑。
 - 在“TiangZ 工程”树和命令面板提供“TiangZ：运行快速工程检查”，调用主工程的 `npm run verify:fast`，不启动服务器、不做压力测试。
 - 从工程树、命令面板或 Proto/Native 文件右键菜单定向运行 Manifest 中的生成器。
-- 独立 Language Server 使用 150ms 防抖，不保留 TypeScript AST，并提供运行状态指标。
+- 独立 Language Server 使用 150ms 防抖，类型检查复用有界 Program/LanguageService 缓存，并提供运行状态指标。
 - 从工程树、原生资源管理器或命令面板运行、调试、停止和重启单个 Process。
 - 将 StartMachine 的 Process 展开为独立 VS Code Task，可分别查看 PID、日志和状态。
 - 自动执行 TypeScript/Cargo 构建，直接运行 Cargo 产出的 TiangZ executable。
@@ -61,7 +67,7 @@ npm run check
 npm run package:extension
 ```
 
-生成的 VSIX 位于 `dist/tiangz-developer-tools-0.15.2.vsix`。
+生成的 VSIX 位于 `dist/tiangz-developer-tools-0.16.2.vsix`。
 GitHub Actions 会在 Windows、Ubuntu 上执行同一套 `npm run check`，并提供可下载的 VSIX artifact。
 
 检查任意 TiangZ 工程：
@@ -119,7 +125,7 @@ node dist/tiangz-design.cjs --input .\DesignRequest.json
 
 可选真实编辑器测试入口为 `extension/test/editor/index.cjs`，不在默认 Node 单测中运行。按 [VS Code 扩展测试入口](https://code.visualstudio.com/api/working-with-extensions/testing-extension) 使用 `--extensionDevelopmentPath=<本仓库>/extension` 和 `--extensionTestsPath=<本仓库>/extension/test/editor/index.cjs`，并指定一次性教学工程、独立 `--user-data-dir`、独立 `--extensions-dir` 和 `--disable-extensions`。先由用户在该隔离配置中显式信任测试工程，再运行测试；测试不会关闭或绕过工作区信任。它验证扩展激活、真实任务诊断位置及两次错误/恢复轮次，不启动游戏或写业务源码。2026-09-16 本机尝试在信任检查处停止，因此不记为真实 Problems 刷新验收通过。
 
-存在根目录 `tiangz.project.json` 时，“TiangZ 工程”树转为模块导航与宿主检查入口，不再用只认识 `app/` 的旧索引扫描模块配置，也不显示旧主工程 Process 启动入口。声明损坏同样不会静默回退；由宿主检查给出修复错误。旧 CLI `tiangz-check-project` 明确拒绝独立模块工程，请使用工程内 `npm run check`。模块源码的实时语义诊断未在旧 LSP 中实现；宿主检查任务仍将错误定位到 Problems 面板。
+存在根目录 `tiangz.project.json` 时，“TiangZ 工程”树转为模块导航与宿主检查入口，不再用只认识 `app/` 的旧索引扫描模块配置，也不显示旧主工程 Process 启动入口。声明损坏同样不会静默回退；由宿主检查给出修复错误。旧 CLI `tiangz-check-project` 明确拒绝独立模块工程，请使用工程内 `npm run check`。受信任工作区的模块实时检查通过已保存声明选择 Host worker，复用宿主 Program；未保存 TS 修正、关闭恢复与跨盘联接模块可在 Problems 验证。宿主不支持、配置未保存或检查超限时明确提示不可用，仍可执行宿主检查任务；详见[类型契约](docs/runtime-contracts.md)。
 
 默认配置适用于 TiangZ 主仓库：
 
@@ -153,9 +159,15 @@ node dist/tiangz-design.cjs --input .\DesignRequest.json
 
 `tiangz.architecture.component-public-collection`与`tiangz.architecture.native-ref-in-handler`同样是低噪音黄色建议。前者防止业务绕过 Component 的集合所有权，后者防止 Handler 泄漏可变 Native 句柄；所属 System 和 Bench 仍可按需要直接使用底层能力。
 
-`tiangz.timer.*`、`tiangz.event.*`与`tiangz.persistence.runtime-id`只检查能从单文件语法树确定的问题。插件不会创建第二套工程级 TypeScript 类型检查器，也不会阻止合法的动态业务代码。
+0.7 network Schema 包含 `maxOutboundBufferedBytes`（默认 64 MiB、1..1 GiB）。它约束 ConnectionWriter 批次 payload 与主动 Inner Host 整包，从复制后的待调度、排队到在途写出；最后引用释放才归还。广播按接收者、Inner 按整包保守累计；不代表 Process 总内存，也不覆盖 RPC 响应、入站或 KCP 内部可靠缓存。插件版本继续按自身版本序列，旧 0.6.x 宿主拒绝该新增配置字段。
 
-`tiangz.hotfix.instance-state`是错误级诊断。它覆盖直接导入、导入别名和命名空间导入，例如 `import { systemFor as bindSystem } ...` 与 `@model.systemFor(...)`；把缓存、TimerId 或其他长期状态写入行为类会在 VS Code Problems 中直接标红。请把状态放到对应的 Model Component/Entity，Handler 只保留参数校验和调用链编排。
+`maxIngressBufferedBytes` 独立限制所有业务 listener 的已解码 Rust 入站帧（默认 64 MiB、1..1 GiB），覆盖队列等待与热更延后帧。额度不足时 Inner RPC 返回现有入口过载，外部/单向连接或 Session 关闭；释放后恢复准入。控制通知不占帧额度，解码器、Host 打包副本、V8/TS mailbox 与 KCP 可靠缓存不在此项范围内。
+
+`maxKcpBufferedBytes` 则限制 KCP C 缓存和输出引用，默认 64 MiB、1..1 GiB，各 Session 另限 4 MiB。使用包含 ACK 扩容峰值的保守额度，纯 ACK 在满额度时仍能释放已确认数据。拒绝或输出回调失败会关闭对应 Session，不能丢掉可靠报文后只记日志。接收/UDP 封包副本、Rust 容器和 V8 不在本项范围内。
+
+生命周期与方法名 Timer 的类型规则由共享 Program 实现提供，CLI、主工程 LSP 与声明宿主的模块检查复用同一规则。动态无法证明的情况返回 warning；稳定诊断码、范围和缓存边界见[类型契约](docs/runtime-contracts.md)。事件和持久化 ID 的现有单文件规则继续保留。
+
+`tiangz.hotfix.instance-state` 是共享 Program ruleset 2 的错误级诊断。它按当前 Core 声明识别 System/Handler（含实体扩展），支持导入/转导出别名和 namespace；字段、构造和 static 成员在 CLI 与 VS Code Problems 中给出一致错误。同名业务函数与旧宿主不误判。没有类型环境时，仅对显式稳定入口的候选类显示 `tiangz.hotfix.unverifiable` 警告，不能冒充已通过检查。状态应放到 Model Component/Entity，Handler 保留参数校验和调用编排。
 
 ## 领域设计助手
 
@@ -179,7 +191,7 @@ node dist/tiangz-design.cjs --input .\DesignRequest.json
 
 ## 工程边界
 
-`packages/project-core` 不依赖 VS Code，只接收相对路径和文件文本。VS Code 扩展负责文件发现和工程树；独立 Language Server 负责 Problems、协议导航、Hover 与 CodeLens。
+`packages/project-core` 不依赖 VS Code：基础索引接收文件文本，类型契约接收调用者 Program，主工程适配器复用有界 LanguageService。VS Code 扩展负责文件发现和工程树；独立 Language Server 负责 Problems、协议导航、Hover 与 CodeLens。
 
 `packages/project-core` 同时被 Language Server 与 CLI 调用，因此编辑器和 CI 使用同一套工程规则。运行时 Inspector 当前先复用主工程 `/metrics` 做只读观测；它不替代后续需要权限控制的实体查询协议。
 
@@ -195,4 +207,4 @@ TiangZ Developer Tools 使用 [Apache License 2.0](LICENSE) 开源，版权归 2
 
 业务 Model/Hotfix 禁止 `await sleep/delay/TimerSystem.WaitAsync`、原生 `setTimeout/setInterval/setImmediate` 与定时器 Promise 包装；延迟、倒计时和周期事件必须走所有者 `NewOnceTimer/NewRepeatedTimer` 方法名回调。数据库/RPC/锁结果等待仍允许。错误码为 `tiangz.timer.time-wait-forbidden`，常见导入与局部函数别名也检查。
 
-检查实现 `businessTimeDiagnostics` 同时供主工程编辑器/CLI 和 TiangZ 模块构建使用。模块编辑器对已打开的标准 `src/model`/`src/hotfix` 文件给出实时错误；完整与自定义目录检查仍运行宿主 `check`/`modules:typecheck`，以 manifest 为准。任意动态或跨文件时间封装仍须审查，不得绕过规范。Runtime、测试与运维工具不作为业务模板。
+检查实现 `businessTimeDiagnostics` 同时供主工程编辑器/CLI 和 TiangZ 模块构建使用。模块实时 worker 按宿主 manifest 的源码根检查当前 Program；不支持 worker 的旧宿主仍只有标准源码目录的已打开文件时间规则，需要运行宿主 `check`/`modules:typecheck`。任意动态或跨文件时间封装仍须审查，不得绕过规范。Runtime、测试与运维工具不作为业务模板。

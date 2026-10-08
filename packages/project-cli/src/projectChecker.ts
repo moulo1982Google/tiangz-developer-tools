@@ -4,6 +4,7 @@ import path from "node:path";
 import {
   analyzeTiangZProject,
   createProjectFilePlan,
+  RuntimeContractProject,
   type ProjectSource,
   type TiangZProjectSnapshot,
 } from "../../project-core/src/index.js";
@@ -55,12 +56,13 @@ export async function checkProject(
     if (metadata.size > maxFileSizeBytes) continue;
     sources.push({ relativePath, text: await readFile(absolutePath, "utf8") });
   }
-  return {
-    projectRoot: root,
-    fileCount: sources.length,
-    elapsedMs: performance.now() - startedAt,
-    snapshot: analyzeTiangZProject(sources),
-  };
+  const contracts = new RuntimeContractProject(root);
+  try {
+    const snapshot = analyzeTiangZProject(sources, contracts.analyze(sources));
+    return { projectRoot: root, fileCount: sources.length, elapsedMs: performance.now() - startedAt, snapshot };
+  } finally {
+    contracts.dispose();
+  }
 }
 
 async function collectTree(

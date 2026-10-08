@@ -4,9 +4,11 @@ import ts from "typescript";
 
 import { validateTypeScriptDependencies } from "./dependencyRules.js";
 import { businessTimeDiagnostics } from "./businessTimeRules.js";
+import { hotfixClassDiagnostics } from "./hotfixStateRules.js";
 import { validateGeneratedIntegrity } from "./generatedIntegrity.js";
 import { resolveMachineProcessPaths } from "./launch.js";
 import { readProjectGenerators } from "./projectFiles.js";
+import type { RuntimeContractProjectResult } from "./runtimeContractProject.js";
 
 import type {
   DeclarationKind,
@@ -60,13 +62,16 @@ interface LifecycleSystemContract {
   readonly location: SourceLocation;
 }
 
-export function analyzeTiangZProject(sources: readonly ProjectSource[]): TiangZProjectSnapshot {
+export function analyzeTiangZProject(sources: readonly ProjectSource[], runtimeContracts?: RuntimeContractProjectResult): TiangZProjectSnapshot {
   // 文件存在即委托宿主，损坏的声明也不能静默回退主工程规则。 / Never fall back on malformed module descriptors.
   if (sources.some((source) => normalizePath(source.relativePath) === "tiangz.project.json")) {
     return { analysisMode: "host-delegated", environments: [], processes: [], machines: [], declarations: [],
-      messageTypes: [], msgcodes: [], protocols: [], handlers: [], generators: [], diagnostics: sources
+      messageTypes: [], msgcodes: [], protocols: [], handlers: [], generators: [],
+      ...(runtimeContracts ? { runtimeContracts: { status: runtimeContracts.status, ruleSetVersion: runtimeContracts.ruleSetVersion,
+        typescriptVersion: runtimeContracts.typescriptVersion, ...(runtimeContracts.reason ? { reason: runtimeContracts.reason } : {}) } } : {}),
+      diagnostics: [...(runtimeContracts?.diagnostics ?? []), ...(runtimeContracts?.status === "checked" ? [] : sources
         .filter(source => /(?:^|\/)src\/(?:model|hotfix)\//.test(normalizePath(source.relativePath)))
-        .flatMap(source => businessTimeDiagnostics(source.text, source.relativePath)) };
+        .flatMap(source => businessTimeDiagnostics(source.text, source.relativePath)))] };
   }
   const processes: ProcessConfigModel[] = [];
   const machines: MachineConfigModel[] = [];
@@ -78,6 +83,8 @@ export function analyzeTiangZProject(sources: readonly ProjectSource[]): TiangZP
   const diagnostics: ProjectDiagnostic[] = [];
   const lifecycleModels: LifecycleModelContract[] = [];
   const lifecycleSystems: LifecycleSystemContract[] = [];
+  const dependencyKey = (file: string) => ts.sys.useCaseSensitiveFileNames ? file : file.toLowerCase();
+  const checkedDependencies = new Set((runtimeContracts?.dependencyCheckedFiles ?? []).map(dependencyKey));
   const manifestText = sources.find(
     (source) => normalizePath(source.relativePath) === "codegen.manifest.json",
   )?.text;
@@ -95,6 +102,8 @@ export function analyzeTiangZProject(sources: readonly ProjectSource[]): TiangZP
         diagnostics,
         lifecycleModels,
         lifecycleSystems,
+        runtimeContracts?.status !== "checked",
+        !checkedDependencies.has(dependencyKey(relativePath)),
       );
     } else if (relativePath.startsWith("configs/") && relativePath.endsWith(".json")) {
       analyzeConfig({ ...source, relativePath }, processes, machines, diagnostics);
@@ -104,10 +113,15 @@ export function analyzeTiangZProject(sources: readonly ProjectSource[]): TiangZP
   resolveKnownSceneFiles(sources, processes, diagnostics);
 
   validateGeneratedIntegrity(sources, diagnostics);
-  validateLifecycleContracts(lifecycleModels, lifecycleSystems, diagnostics);
+  validateLifecycleContracts(lifecycleModels, lifecycleSystems, diagnostics, runtimeContracts?.status !== "checked");
+  if (runtimeContracts) diagnostics.push(...runtimeContracts.diagnostics);
   resolveProtocolCodes(protocols, msgcodes);
   validateProject(processes, machines, declarations, protocols, handlers, diagnostics);
   return {
+    ...(runtimeContracts ? { runtimeContracts: {
+      status: runtimeContracts.status, ruleSetVersion: runtimeContracts.ruleSetVersion, typescriptVersion: runtimeContracts.typescriptVersion,
+      ...(runtimeContracts.reason ? { reason: runtimeContracts.reason } : {}),
+    } } : {}),
     environments: [...new Set([
       ...processes.map((process) => process.environment),
       ...machines.map((machine) => machine.environment),
@@ -345,6 +359,8 @@ function analyzeTypeScript(
   diagnostics: ProjectDiagnostic[],
   lifecycleModels: LifecycleModelContract[],
   lifecycleSystems: LifecycleSystemContract[],
+  hotfixAdvisories: boolean,
+  dependencyAdvisories: boolean,
 ): void {
   const sourceFile = ts.createSourceFile(
     source.relativePath,
@@ -366,9 +382,13 @@ function analyzeTypeScript(
     });
   }
   analyzeGeneratedProtocol(sourceFile, source.relativePath, messageTypes, msgcodes, protocols);
-  validateTypeScriptDependencies(sourceFile, source.relativePath, diagnostics);
+  if (dependencyAdvisories) validateTypeScriptDependencies(sourceFile, source.relativePath, diagnostics);
   validateRuntimeShapeStability(sourceFile, source.relativePath, diagnostics);
-  validateHotfixStateBoundary(sourceFile, source.relativePath, diagnostics);
+  if (hotfixAdvisories && source.relativePath.startsWith("app/hotfix/") && !source.relativePath.includes("/bench/")) {
+    diagnostics.push(...hotfixClassDiagnostics(sourceFile, undefined, {
+      typescript: ts, projectRoot: process.cwd(), coreRoot: path.resolve("app/core"),
+    }));
+  }
   validateOwnedComponentBoundaries(sourceFile, source.relativePath, diagnostics);
   validateRuntimeFoundationUsage(sourceFile, source.relativePath, diagnostics);
   if (isBusinessRuntimeSource(source.relativePath)) diagnostics.push(...businessTimeDiagnostics(source.text, source.relativePath));
@@ -538,6 +558,7 @@ function validateLifecycleContracts(
   models: readonly LifecycleModelContract[],
   systems: readonly LifecycleSystemContract[],
   diagnostics: ProjectDiagnostic[],
+  checkAsyncModifiers: boolean,
 ): void {
   for (const model of models) {
     const matches = systems.filter((system) => system.target === model.name);
@@ -557,7 +578,7 @@ function validateLifecycleContracts(
     for (const method of model.requiredMethods) validateMethod(model, system, method, false);
     for (const method of model.transferMethods) {
       if (model.ownMethods.has(method)) {
-        if (model.ownAsyncMethods.has(method)) {
+        if (checkAsyncModifiers && model.ownAsyncMethods.has(method)) {
           diagnostics.push({
             code: "tiangz.lifecycle.async-method",
             severity: "error",
@@ -587,7 +608,7 @@ function validateLifecycleContracts(
       });
       return;
     }
-    if (implementation.async) {
+    if (checkAsyncModifiers && implementation.async) {
       diagnostics.push({
         code: "tiangz.lifecycle.async-method",
         severity: "error",
@@ -965,96 +986,6 @@ function validateRuntimeShapeStability(
     });
   }
 }
-
-/**
- * 禁止 Hotfix System/行为类保存实例状态。
- * Hotfix System classes are patched onto stable Model prototypes and are not constructed as normal state owners.
- *
- * 副作用：只产生编辑器/CI诊断，不改变运行时；不要把本检查扩大到Model Component，否则会误伤真正的状态拥有者。
- * Side effects: emits editor/CI diagnostics only; do not apply this rule to Model Components, which are the real state owners.
- */
-function validateHotfixStateBoundary(
-  sourceFile: ts.SourceFile,
-  relativePath: string,
-  diagnostics: ProjectDiagnostic[],
-): void {
-  const normalized = normalizePath(relativePath);
-  if (!normalized.startsWith("app/hotfix/") || normalized.includes("/bench/")) return;
-
-  const decoratorAliases = new Map<string, string>();
-  const namespaceAliases = new Set<string>();
-  for (const statement of sourceFile.statements) {
-    if (!ts.isImportDeclaration(statement) || !ts.isStringLiteral(statement.moduleSpecifier)
-      || statement.moduleSpecifier.text !== "#tiangz/model") continue;
-    const clause = statement.importClause;
-    if (!clause?.namedBindings) continue;
-    if (ts.isNamespaceImport(clause.namedBindings)) {
-      namespaceAliases.add(clause.namedBindings.name.text);
-      continue;
-    }
-    for (const element of clause.namedBindings.elements) {
-      const imported = element.propertyName?.text ?? element.name.text;
-      decoratorAliases.set(element.name.text, imported);
-    }
-  }
-
-  function visit(node: ts.Node): void {
-    if (ts.isClassDeclaration(node) && node.name && hasHotfixBehaviorDecorator(node)) {
-      for (const member of node.members) {
-        if (ts.isConstructorDeclaration(member)) {
-          report(member.name ?? member, "Hotfix行为类不能声明构造函数；请把初始化放到Model的Awake/Component中。 / Hotfix behavior classes must not declare constructors; put initialization in Model Awake/Component state.");
-          continue;
-        }
-        if (ts.isPropertyDeclaration(member) || ts.isClassStaticBlockDeclaration(member)
-          || hasStaticModifier(member)) {
-          report(member, "Hotfix行为类不能声明字段、静态块或静态成员；这类不会被正常实例化，状态会变成undefined。请把状态放到Model Component/Entity。 / Hotfix behavior classes must not declare fields, static blocks, or static members; they are not normal instances. Put state in a Model Component/Entity.");
-        }
-      }
-    }
-    ts.forEachChild(node, visit);
-  }
-
-  visit(sourceFile);
-
-  function hasHotfixBehaviorDecorator(declaration: ts.ClassDeclaration): boolean {
-    return decoratorsOf(declaration).some((decorator) => {
-      const call = decoratorCall(decorator);
-      const expression = call?.expression ?? decorator.expression;
-      if (ts.isIdentifier(expression)) {
-        return HOTFIX_BEHAVIOR_DECORATORS.has(decoratorAliases.get(expression.text) ?? expression.text);
-      }
-      if (ts.isPropertyAccessExpression(expression) && ts.isIdentifier(expression.expression)
-        && namespaceAliases.has(expression.expression.text)) {
-        return HOTFIX_BEHAVIOR_DECORATORS.has(expression.name.text);
-      }
-      return HOTFIX_BEHAVIOR_DECORATORS.has(expressionName(expression));
-    });
-  }
-
-  function report(node: ts.Node, message: string): void {
-    diagnostics.push({
-      code: "tiangz.hotfix.instance-state",
-      severity: "error",
-      message,
-      location: sourceLocation(sourceFile, node.getStart(sourceFile), relativePath),
-    });
-  }
-}
-
-const HOTFIX_BEHAVIOR_DECORATORS = new Set([
-  "hotfixFor",
-  "systemFor",
-  "rpcHandler",
-  "messageHandler",
-  "sessionRpcHandler",
-  "sessionMessageHandler",
-  "unitRpcHandler",
-  "unitMessageHandler",
-  "actorRpcHandler",
-  "actorMessageHandler",
-  "syncEventHandler",
-  "vetoEventHandler",
-]);
 
 /** 检查基本类型字段是否允许写入 undefined；这会破坏长期状态的固定类型约束。 / Checks whether a primitive state field admits undefined, which breaks its stable lifetime type. */
 function hasPrimitiveUndefinedUnion(type: ts.TypeNode): boolean {

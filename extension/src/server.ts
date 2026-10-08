@@ -4,6 +4,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 
 import {
   analyzeTiangZProject,
+  RuntimeContractProject,
   type HandlerModel,
   type ProjectSource,
   type ProtocolDescriptorModel,
@@ -27,6 +28,7 @@ import {
   type ReferenceParams,
 } from "vscode-languageserver/node";
 import { TextDocument } from "vscode-languageserver-textdocument";
+import { ModuleLiveChecks } from "./moduleLiveChecks.js";
 
 const INDEX_FILES_NOTIFICATION = "tiangzProject/indexFiles";
 const SNAPSHOT_NOTIFICATION = "tiangzProject/snapshot";
@@ -48,6 +50,9 @@ const connection = createConnection(ProposedFeatures.all);
 const documents = new TextDocuments(TextDocument);
 const sources = new Map<string, CachedSource>();
 const snapshots = new Map<string, TiangZProjectSnapshot>();
+const contractProjects = new Map<string, RuntimeContractProject>();
+const moduleChecks = new ModuleLiveChecks(() => scheduleValidation(0));
+const MAX_CACHED_TYPE_PROJECTS = 4;
 const publishedUris = new Set<string>();
 const indexedUris = new Set<string>();
 let rootUris: readonly string[] = [];
@@ -56,6 +61,9 @@ let shuttingDown = false;
 let validationCount = 0;
 let lastValidationMs = 0;
 let maxValidationMs = 0;
+let validationRevision = 0;
+let validationRunning = false;
+let validationPending = false;
 
 connection.onInitialize((params: InitializeParams): InitializeResult => {
   rootUris = (params.workspaceFolders ?? []).map((folder) => folder.uri);
@@ -94,7 +102,13 @@ connection.onNotification(INDEX_FILES_NOTIFICATION, (value: unknown) => {
       : [];
   const groups = candidates.filter(isIndexedRootFiles);
   rootUris = [...new Set(groups.map(group => group.rootUri))];
+  validationRevision += 1;
+  moduleChecks.configure(rootUris.map(root => fileURLToPath(root)), isRecord(value) && value.trusted === true);
+  if (isRecord(value) && value.reloadModules === true) for (const root of rootUris) moduleChecks.invalidate(fileURLToPath(root));
   for (const root of snapshots.keys()) if (!rootUris.includes(root)) snapshots.delete(root);
+  for (const [root, project] of contractProjects) {
+    if (!rootUris.includes(root)) { project.dispose(); contractProjects.delete(root); }
+  }
   for (const [uri, source] of sources) {
     if (!rootUris.includes(source.rootUri)) {
       sources.delete(uri);
@@ -116,9 +130,12 @@ connection.onNotification(INDEX_FILES_NOTIFICATION, (value: unknown) => {
 });
 
 connection.onDidChangeWatchedFiles((change) => {
+  validationRevision += 1;
   const changed: IndexedRootFiles[] = [];
   for (const event of change.changes) {
     if (!isProjectFile(event.uri)) continue;
+    const root = resolveRootUri(event.uri);
+    if (root && /\/(?:tiangz\.(?:project|module)|tsconfig[^/]*|package(?:-lock)?)\.json$/.test(event.uri)) moduleChecks.invalidate(fileURLToPath(root));
     if (event.type === FileChangeType.Deleted) sources.delete(event.uri);
     else {
       const rootUri = resolveRootUri(event.uri);
@@ -134,7 +151,10 @@ documents.onDidChangeContent((event) => updateOpenDocument(event.document));
 documents.onDidClose((event) => {
   if (!event.document.uri.startsWith("file:") || !isProjectFile(event.document.uri)) return;
   const rootUri = resolveRootUri(event.document.uri);
+  validationRevision += 1;
+  if (!indexedUris.has(event.document.uri)) sources.delete(event.document.uri);
   if (rootUri) void loadFiles([{ rootUri, uris: [event.document.uri] }]);
+  else scheduleValidation();
 });
 
 connection.onDefinition((params): Definition | null => {
@@ -254,8 +274,11 @@ connection.onCodeLens((params): CodeLens[] => {
 });
 
 connection.onRequest(SERVER_STATS_REQUEST, () => ({
+  ...moduleChecks.stats,
   roots: rootUris.length,
   cachedFiles: sources.size,
+  cachedTypeProjects: contractProjects.size,
+  cachedTypeFiles: [...contractProjects.values()].reduce((sum, project) => sum + project.cachedFileCount, 0),
   snapshots: snapshots.size,
   protocols: [...snapshots.values()].reduce((sum, snapshot) => sum + snapshot.protocols.length, 0),
   handlers: [...snapshots.values()].reduce((sum, snapshot) => sum + snapshot.handlers.length, 0),
@@ -265,14 +288,22 @@ connection.onRequest(SERVER_STATS_REQUEST, () => ({
   heapUsedBytes: process.memoryUsage().heapUsed,
 }));
 
-connection.onShutdown(() => {
+connection.onShutdown(async () => {
   shuttingDown = true;
+  validationRevision += 1;
   if (validationTimer) clearTimeout(validationTimer);
   for (const uri of publishedUris) connection.sendDiagnostics({ uri, diagnostics: [] });
   sources.clear();
   snapshots.clear();
+  for (const project of contractProjects.values()) project.dispose();
+  contractProjects.clear();
   indexedUris.clear();
+  await moduleChecks.dispose();
 });
+// 断开 IPC 或非正常 LSP exit 也不能遗留宿主进程。 / Do not orphan host workers on transport loss or abnormal LSP exit.
+connection.onExit(() => { void moduleChecks.dispose(); });
+process.once("disconnect", () => { void moduleChecks.dispose(); });
+process.once("exit", () => { void moduleChecks.dispose(); });
 
 documents.listen(connection);
 connection.listen();
@@ -308,7 +339,7 @@ async function loadFiles(groups: readonly IndexedRootFiles[]): Promise<void> {
 function updateOpenDocument(document: TextDocument): void {
   if (!isProjectFile(document.uri)) return;
   const rootUri = resolveRootUri(document.uri);
-  if (!rootUri) return;
+  if (!rootUri) { scheduleValidation(); return; }
   sources.set(document.uri, {
     uri: document.uri,
     rootUri,
@@ -320,21 +351,60 @@ function updateOpenDocument(document: TextDocument): void {
 
 function scheduleValidation(delay = VALIDATION_DEBOUNCE_MS): void {
   if (shuttingDown) return;
+  validationRevision += 1;
   if (validationTimer) clearTimeout(validationTimer);
   validationTimer = setTimeout(() => {
     validationTimer = undefined;
-    validateWorkspace();
+    void validateWorkspace().catch(error => connection.console.error(errorMessage(error)));
   }, delay);
 }
 
-function validateWorkspace(): void {
+async function validateWorkspace(): Promise<void> {
+  if (shuttingDown) return;
+  if (validationRunning) { validationPending = true; return; }
+  validationRunning = true;
+  validationPending = false;
+  const revision = validationRevision;
+  try { await validateCurrentWorkspace(revision); }
+  finally {
+    validationRunning = false;
+    if (validationPending || revision !== validationRevision) scheduleValidation(0);
+  }
+}
+
+async function validateCurrentWorkspace(revision: number): Promise<void> {
   const startedAt = performance.now();
   const nextPublished = new Set<string>();
-  for (const rootUri of rootUris) {
+  const results = await Promise.all(rootUris.map(async rootUri => {
     const projectSources = [...sources.values()]
       .filter((source) => source.rootUri === rootUri)
       .map(({ relativePath, text }) => ({ relativePath, text }));
-    const snapshot = analyzeTiangZProject(projectSources);
+    if (projectSources.some(source => source.relativePath === "tiangz.project.json")) {
+      contractProjects.get(rootUri)?.dispose();
+      contractProjects.delete(rootUri);
+      // 联接模块的真实源码可在工程目录外；由宿主返回的目录/声明集合筛选。
+      // Linked modules may be opened through their real path; only the host selects matching inputs.
+      const overlays = documents.all().filter(document => document.uri.startsWith("file:"))
+        .map(document => ({ file: fileURLToPath(document.uri), text: document.getText() }));
+      const contracts = await moduleChecks.analyze(fileURLToPath(rootUri), overlays);
+      return { rootUri, projectSources, snapshot: analyzeTiangZProject(projectSources, contracts) };
+    }
+    moduleChecks.invalidate(fileURLToPath(rootUri));
+    let project = contractProjects.get(rootUri);
+    if (!project) project = new RuntimeContractProject(fileURLToPath(rootUri));
+    const contracts = project.analyze(projectSources);
+    contractProjects.delete(rootUri);
+    if (contracts.status === "checked") contractProjects.set(rootUri, project);
+    while (contractProjects.size > MAX_CACHED_TYPE_PROJECTS) {
+      const oldest = contractProjects.keys().next().value!;
+      contractProjects.get(oldest)!.dispose();
+      contractProjects.delete(oldest);
+    }
+    return { rootUri, projectSources, snapshot: analyzeTiangZProject(projectSources, contracts) };
+  }));
+  // 输入到达即失效，不能等去抖结束才拒绝旧结果。 / Invalidate on input arrival, before the debounce timer fires.
+  if (shuttingDown || revision !== validationRevision) return;
+  for (const { rootUri, projectSources, snapshot } of results) {
     snapshots.set(rootUri, snapshot);
     connection.sendNotification(SNAPSHOT_NOTIFICATION, { rootUri, snapshot });
     const grouped = new Map<string, ReturnType<typeof toDiagnostic>[]>();
@@ -349,6 +419,11 @@ function validateWorkspace(): void {
       const values = grouped.get(uri) ?? [];
       connection.sendDiagnostics({ uri, diagnostics: values });
       nextPublished.add(uri);
+    }
+    // 配置或依赖图内未被旧索引覆盖的类型错误也必须可定位。
+    // Publish type diagnostics even when the legacy text index did not include their file.
+    for (const [uri, values] of grouped) {
+      if (!nextPublished.has(uri)) { connection.sendDiagnostics({ uri, diagnostics: values }); nextPublished.add(uri); }
     }
   }
   for (const uri of publishedUris) {
@@ -626,7 +701,7 @@ function uriForLocation(rootUri: string, location: SourceLocation): string {
 }
 
 function uriForRelativePath(rootUri: string, relativePath: string): string {
-  return pathToFileURL(path.join(fileURLToPath(rootUri), ...relativePath.split("/"))).toString();
+  return pathToFileURL(path.resolve(fileURLToPath(rootUri), relativePath)).toString();
 }
 
 function prefersServer(relativePath: string): boolean {

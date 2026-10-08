@@ -2,7 +2,7 @@
   "name": "tiangz-developer-tools",
   "displayName": "TiangZ Developer Tools",
   "description": "TiangZ Process、Scene、协议导航、运行与 TypeScript 调试工具",
-  "version": "0.15.2",
+  "version": "0.16.2",
   "publisher": "moulo",
   "author": "moulo",
   "license": "Apache-2.0",
@@ -40,10 +40,13 @@
     "Debug"
   ],
   "files": [
+    "dist/build-info.json",
     "dist/extension.cjs",
     "dist/extension.cjs.map",
     "dist/server.cjs",
     "dist/server.cjs.map",
+    "dist/lib*.d.ts",
+    "dist/typescript-*.txt",
     "schemas/**",
     "guides/**",
     "README.md",
@@ -103,8 +106,15 @@
     "taskDefinitions": [
       {
         "type": "tiangz-module-project",
-        "required": ["operation"],
-        "properties": { "operation": { "type": "string", "description": "由 TiangZ 宿主实现的模块工程动作。" } }
+        "required": [
+          "operation"
+        ],
+        "properties": {
+          "operation": {
+            "type": "string",
+            "description": "由 TiangZ 宿主实现的模块工程动作。"
+          }
+        }
       },
       {
         "type": "tiangz-process",
@@ -172,10 +182,26 @@
         "command": "tiangzDeveloperTools.previewTimerSkeleton",
         "title": "TiangZ：生成定时器方法骨架（新草稿）"
       },
-      { "command": "tiangzDeveloperTools.createModuleProject", "title": "TiangZ：创建模块入门工程", "icon": "$(new-folder)" },
-      { "command": "tiangzDeveloperTools.moduleProjectAction", "title": "TiangZ：模块工程操作", "icon": "$(tools)" },
-      { "command": "tiangzDeveloperTools.startModuleDevelopment", "title": "TiangZ：启动模块开发模式", "icon": "$(play)" },
-      { "command": "tiangzDeveloperTools.createModuleComponent", "title": "TiangZ：新建模块 Component", "icon": "$(new-file)" },
+      {
+        "command": "tiangzDeveloperTools.createModuleProject",
+        "title": "TiangZ：创建模块入门工程",
+        "icon": "$(new-folder)"
+      },
+      {
+        "command": "tiangzDeveloperTools.moduleProjectAction",
+        "title": "TiangZ：模块工程操作",
+        "icon": "$(tools)"
+      },
+      {
+        "command": "tiangzDeveloperTools.startModuleDevelopment",
+        "title": "TiangZ：启动模块开发模式",
+        "icon": "$(play)"
+      },
+      {
+        "command": "tiangzDeveloperTools.createModuleComponent",
+        "title": "TiangZ：新建模块 Component",
+        "icon": "$(new-file)"
+      },
       {
         "command": "tiangzDeveloperTools.inspectModules",
         "title": "TiangZ：读取模块结构",
@@ -318,11 +344,31 @@
     ],
     "menus": {
       "view/title": [
-        { "command": "tiangzDeveloperTools.createModuleProject", "when": "view == tiangzModules", "group": "navigation@2" },
-        { "command": "tiangzDeveloperTools.moduleProjectAction", "when": "view == tiangzModules", "group": "navigation@3" },
-        { "command": "tiangzDeveloperTools.startModuleDevelopment", "when": "view == tiangzModules", "group": "navigation@4" },
-        { "command": "tiangzDeveloperTools.stopDevSourceMode", "when": "view == tiangzModules", "group": "navigation@5" },
-        { "command": "tiangzDeveloperTools.createModuleComponent", "when": "view == tiangzModules", "group": "module@1" },
+        {
+          "command": "tiangzDeveloperTools.createModuleProject",
+          "when": "view == tiangzModules",
+          "group": "navigation@2"
+        },
+        {
+          "command": "tiangzDeveloperTools.moduleProjectAction",
+          "when": "view == tiangzModules",
+          "group": "navigation@3"
+        },
+        {
+          "command": "tiangzDeveloperTools.startModuleDevelopment",
+          "when": "view == tiangzModules",
+          "group": "navigation@4"
+        },
+        {
+          "command": "tiangzDeveloperTools.stopDevSourceMode",
+          "when": "view == tiangzModules",
+          "group": "navigation@5"
+        },
+        {
+          "command": "tiangzDeveloperTools.createModuleComponent",
+          "when": "view == tiangzModules",
+          "group": "module@1"
+        },
         {
           "command": "tiangzDeveloperTools.inspectModules",
           "when": "view == tiangzModules",

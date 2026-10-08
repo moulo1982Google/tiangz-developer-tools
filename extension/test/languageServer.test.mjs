@@ -1,14 +1,88 @@
 import assert from "node:assert/strict";
-import { spawn } from "node:child_process";
+import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { projectFiles, contractSource } from "../../packages/project-core/test/runtime-contract-fixture.mjs";
+
+import { StdioRpc } from "./stdioRpc.mjs";
 
 const testRoot = path.dirname(fileURLToPath(import.meta.url));
-const serverPath = path.resolve(testRoot, "../dist/server.cjs");
+const serverPath = process.env.TIANGZ_TEST_SERVER_PATH ?? path.resolve(testRoot, "../dist/server.cjs");
+
+test("CLI and actual LSP share typed contracts, unsaved changes and project cache disposal", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "tiangz-contract-lsp-"));
+  const rpc = new StdioRpc(serverPath);
+  try {
+    const hotfixSource = `import { systemFor as bind, Component } from "#tiangz/model";
+@bind(Component)
+export class BadSystem extends Component {
+  cache = 0;
+  static task() {}
+}`;
+    const files = { ...projectFiles,
+      "app/core/public.ts": projectFiles["app/core/public.ts"] + '\nexport declare function systemFor(...args: any[]): any;',
+      "app/core/internal.ts": 'export interface Hidden { value: number }',
+      "app/model/public.ts": 'export * from "../core/public";',
+      "app/model/Worker.ts": contractSource + '\nimport type { Hidden } from "../core/internal";',
+      "app/hotfix/BadSystem.ts": hotfixSource,
+    };
+    const config = JSON.parse(files["tsconfig.json"]);
+    config.compilerOptions.paths = { "#tiangz/model": ["./app/model/public.ts"] };
+    files["tsconfig.json"] = JSON.stringify(config);
+    for (const [relative, text] of Object.entries(files)) {
+      const file = path.join(root, relative);
+      await mkdir(path.dirname(file), { recursive: true });
+      await writeFile(file, text);
+    }
+    const cli = spawnSync(process.execPath, [path.resolve(testRoot, "../../dist/tiangz-check-project.cjs"), root, "--format", "json"], { encoding: "utf8", windowsHide: true });
+    assert.equal(cli.status, 1, cli.stderr);
+    const checked = JSON.parse(cli.stdout);
+    assert.equal(checked.runtimeContracts.status, "checked");
+    assert.equal(checked.runtimeContracts.ruleSetVersion, 2);
+    assert.equal(checked.errors, 6, cli.stdout);
+    assert.equal(checked.diagnostics.filter(item => item.code === "tiangz.architecture.invalid-dependency").length, 1);
+    assert.deepEqual(checked.diagnostics.filter(item => item.code.startsWith("tiangz.hotfix.")).map(item => [item.code, item.severity, item.location.line]), [
+      ["tiangz.hotfix.instance-state", "error", 3], ["tiangz.hotfix.instance-state", "error", 4],
+    ]);
+    const rootUri = pathToFileURL(root).toString();
+    const sourceUri = pathToFileURL(path.join(root, "app/model/Worker.ts")).toString();
+    await rpc.request("initialize", { processId: null, rootUri, capabilities: {}, workspaceFolders: [{ uri: rootUri, name: "contracts" }] });
+    rpc.notify("initialized", {});
+    const first = rpc.waitForNotification("tiangzProject/snapshot", params => params.rootUri === rootUri);
+    rpc.notify("tiangzProject/indexFiles", { roots: [{ rootUri, uris: Object.keys(files).map(file => pathToFileURL(path.join(root, file)).toString()) }] });
+    const snapshot = (await first).snapshot;
+    assert.equal(snapshot.runtimeContracts?.status, "checked", JSON.stringify(snapshot.runtimeContracts));
+    assert.deepEqual(snapshot.diagnostics, checked.diagnostics);
+    const stats = await rpc.request("tiangzProject/serverStats", null);
+    assert.equal(stats.cachedTypeProjects, 1);
+    assert.ok(stats.cachedTypeFiles > 2 && stats.cachedTypeFiles < 200);
+
+    const fixed = contractSource.replace("async Awake()", "Awake()").replace('"Missing"', '"Tick"').replace('"wrong"', '{ value: 2 }');
+    const update = rpc.waitForNotification("tiangzProject/snapshot", params => params.rootUri === rootUri && params.snapshot.runtimeContracts?.status === "checked" && params.snapshot.diagnostics.length === 0);
+    open(rpc, sourceUri, fixed, 1);
+    open(rpc, pathToFileURL(path.join(root, "app/hotfix/BadSystem.ts")).toString(), hotfixSource.replace("  cache = 0;", "").replace("  static task() {}", "  task() {}"), 1);
+    await update;
+    const afterEdit = await rpc.request("tiangzProject/serverStats", null);
+    assert.equal(afterEdit.cachedTypeProjects, 1);
+    assert.equal(afterEdit.cachedTypeFiles, stats.cachedTypeFiles);
+    const closed = rpc.waitForNotification("textDocument/publishDiagnostics", params => params.uri === sourceUri && params.diagnostics.length === 0);
+    rpc.notify("tiangzProject/indexFiles", { roots: [] });
+    await closed;
+    const afterClose = await rpc.request("tiangzProject/serverStats", null);
+    assert.equal(afterClose.cachedTypeProjects, 0);
+    assert.equal(afterClose.cachedTypeFiles, 0);
+    await rpc.request("shutdown", null);
+    rpc.notify("exit", null);
+    await rpc.waitForExit();
+  } finally {
+    rpc.dispose();
+    await rm(root, { recursive: true, force: true });
+  }
+});
 
 test("provides protocol diagnostics, navigation, Hover and CodeLens", async () => {
   const rpc = new StdioRpc(serverPath);
@@ -90,7 +164,7 @@ export class LoginHandler implements SessionRpcHandler<LoginScene, LoginSession,
     const stateDiagnostics = rpc.waitForNotification(
       "textDocument/publishDiagnostics",
       (params) => params.uri === stateUri
-        && params.diagnostics.some((diagnostic) => diagnostic.code === "tiangz.hotfix.instance-state"),
+        && params.diagnostics.some((diagnostic) => diagnostic.code === "tiangz.hotfix.unverifiable"),
     );
     open(rpc, stateUri, `import { systemFor as bindSystem, Component } from "#tiangz/model";
 @bindSystem(Component)
@@ -99,11 +173,11 @@ export class StatefulSystem extends Component {
   constructor() {}
 }`, 1);
     const stateDiagnosticCodes = (await stateDiagnostics).diagnostics
-      .filter((diagnostic) => diagnostic.code === "tiangz.hotfix.instance-state")
-      .map((diagnostic) => diagnostic.code);
+      .filter((diagnostic) => diagnostic.code === "tiangz.hotfix.unverifiable")
+      .map((diagnostic) => [diagnostic.code, diagnostic.severity]);
     assert.deepEqual(stateDiagnosticCodes, [
-      "tiangz.hotfix.instance-state",
-      "tiangz.hotfix.instance-state",
+      ["tiangz.hotfix.unverifiable", 2],
+      ["tiangz.hotfix.unverifiable", 2],
     ]);
 
     const references = await rpc.request("textDocument/references", {
@@ -348,97 +422,29 @@ test("module editor rejects time waits and clears diagnostics after an owned tim
   } finally { rpc.dispose(); }
 });
 
-class StdioRpc {
-  #child;
-  #buffer = Buffer.alloc(0);
-  #nextId = 1;
-  #pending = new Map();
-  #notificationWaiters = [];
-  #stderr = "";
-
-  constructor(server) {
-    this.#child = spawn(process.execPath, [server, "--stdio"], { stdio: ["pipe", "pipe", "pipe"] });
-    this.#child.stdout.on("data", (chunk) => this.#consume(chunk));
-    this.#child.stderr.on("data", (chunk) => { this.#stderr += chunk.toString(); });
-  }
-
-  request(method, params) {
-    const id = this.#nextId++;
-    const result = new Promise((resolve, reject) => {
-      const timeout = setTimeout(() => {
-        this.#pending.delete(id);
-        reject(new Error(`Timed out waiting for ${method}. stderr=${this.#stderr}`));
-      }, 5_000);
-      this.#pending.set(id, {
-        resolve: (value) => { clearTimeout(timeout); resolve(value); },
-        reject: (error) => { clearTimeout(timeout); reject(error); },
-      });
-    });
-    this.#send({ jsonrpc: "2.0", id, method, params });
-    return result;
-  }
-
-  notify(method, params) {
-    this.#send({ jsonrpc: "2.0", method, params });
-  }
-
-  waitForNotification(method, predicate) {
-    return new Promise((resolve, reject) => {
-      const entry = {
-        method,
-        predicate,
-        resolve: (value) => { clearTimeout(timeout); resolve(value); },
-      };
-      const timeout = setTimeout(() => {
-        this.#notificationWaiters = this.#notificationWaiters.filter((waiter) => waiter !== entry);
-        reject(new Error(`Timed out waiting for ${method}. stderr=${this.#stderr}`));
-      }, 5_000);
-      this.#notificationWaiters.push(entry);
-    });
-  }
-
-  waitForExit() {
-    if (this.#child.exitCode !== null) return Promise.resolve(this.#child.exitCode);
-    return new Promise((resolve) => this.#child.once("exit", resolve));
-  }
-
-  dispose() {
-    if (this.#child.exitCode === null) this.#child.kill();
-  }
-
-  #send(message) {
-    const json = JSON.stringify(message);
-    this.#child.stdin.write(`Content-Length: ${Buffer.byteLength(json)}\r\n\r\n${json}`);
-  }
-
-  #consume(chunk) {
-    this.#buffer = Buffer.concat([this.#buffer, chunk]);
-    while (true) {
-      const headerEnd = this.#buffer.indexOf("\r\n\r\n");
-      if (headerEnd < 0) return;
-      const length = Number(/Content-Length:\s*(\d+)/i.exec(this.#buffer.subarray(0, headerEnd).toString())?.[1]);
-      const messageEnd = headerEnd + 4 + length;
-      if (!Number.isFinite(length) || this.#buffer.length < messageEnd) return;
-      const message = JSON.parse(this.#buffer.subarray(headerEnd + 4, messageEnd).toString());
-      this.#buffer = this.#buffer.subarray(messageEnd);
-      this.#dispatch(message);
-    }
-  }
-
-  #dispatch(message) {
-    if (message.id !== undefined) {
-      const pending = this.#pending.get(message.id);
-      if (!pending) return;
-      this.#pending.delete(message.id);
-      if (message.error) pending.reject(new Error(message.error.message));
-      else pending.resolve(message.result);
-      return;
-    }
-    const waiter = this.#notificationWaiters.find(
-      (candidate) => candidate.method === message.method && candidate.predicate(message.params),
-    );
-    if (!waiter) return;
-    this.#notificationWaiters = this.#notificationWaiters.filter((candidate) => candidate !== waiter);
-    waiter.resolve(message.params);
-  }
-}
+test("language server applies the same lexical timer rule to module edits", async () => {
+  const rpc = new StdioRpc(serverPath);
+  try {
+    const rootUri = process.platform === "win32" ? "file:///C:/timer-scope-game" : "file:///timer-scope-game";
+    await rpc.request("initialize", { processId: null, rootUri, capabilities: {}, workspaceFolders: [{ uri: rootUri, name: "timer-scope-game" }] });
+    rpc.notify("initialized", {});
+    open(rpc, `${rootUri}/tiangz.project.json`, "{}", 1);
+    const uri = `${rootUri}/modules/game/src/hotfix/Upgrade.ts`;
+    const source = "import { setTimeout as pause } from 'node:timers/promises';\n"
+      + "async function valid(pause: () => Promise<void>) { await pause(); }\n"
+      + "async function invalid() { await pause(10); }\n";
+    const bad = rpc.waitForNotification("textDocument/publishDiagnostics", params => params.uri === uri && params.diagnostics.length > 0);
+    open(rpc, uri, source, 1);
+    const diagnostics = (await bad).diagnostics;
+    assert.equal(diagnostics.length, 1);
+    assert.equal(diagnostics[0].code, "tiangz.timer.time-wait-forbidden");
+    assert.equal(diagnostics[0].severity, 1);
+    assert.equal(diagnostics[0].range.start.line, 2);
+    const fixed = rpc.waitForNotification("textDocument/publishDiagnostics", params => params.uri === uri && params.diagnostics.length === 0);
+    rpc.notify("textDocument/didChange", { textDocument: { uri, version: 2 }, contentChanges: [{ text: source.split("\n").slice(0, 2).join("\n") }] });
+    await fixed;
+    await rpc.request("shutdown", null);
+    rpc.notify("exit", null);
+    await rpc.waitForExit();
+  } finally { rpc.dispose(); }
+});

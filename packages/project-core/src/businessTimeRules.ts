@@ -5,58 +5,99 @@ const waits = new Set(["sleep", "Sleep", "sleepAsync", "SleepAsync", "sleepHost"
 const nativeTimers = new Set(["setTimeout", "setInterval", "setImmediate"]);
 const ownedTimers = new Set(["NewOnceTimer", "NewRepeatedTimer"]);
 
+interface Binding { readonly kind?: string; readonly initializer?: ts.Expression }
+interface Scope { readonly parent?: Scope; readonly functionScope: boolean; readonly bindings: Map<string, Binding> }
+
 /** 检查业务时间调度；调用者按模块清单选择业务源码，不扫描 Runtime 与工具。
  * Checks business time scheduling; callers select business sources rather than Runtime/tooling.
  */
 export function businessTimeDiagnostics(text: string, relativePath: string): ProjectDiagnostic[] {
   if (/\.d\.ts$|(?:^|\/)(?:generated|Generated|tests?|__tests__|bench)\/|\.(?:test|spec)\.ts$/.test(relativePath.replaceAll("\\", "/"))) return [];
   const tree = ts.createSourceFile(relativePath, text, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
-  const aliases = new Map<string, string>();
-  const namespaces = new Set<string>();
+  const scopes = new WeakMap<ts.Node, Scope>();
+  const rootScope: Scope = { functionScope: true, bindings: new Map() };
   const diagnostics: ProjectDiagnostic[] = [];
-  for (const statement of tree.statements) {
-    if (!ts.isImportDeclaration(statement) || !ts.isStringLiteral(statement.moduleSpecifier)) continue;
-    const timersModule = /^(?:node:)?timers(?:\/promises)?$/.test(statement.moduleSpecifier.text);
-    const binding = statement.importClause?.namedBindings;
-    if (binding && ts.isNamedImports(binding)) for (const element of binding.elements) {
-      const original = (element.propertyName ?? element.name).text;
-      if ((timersModule && nativeTimers.has(original)) || waits.has(original)) aliases.set(element.name.text, original);
-      if (original === "TimerSystem") aliases.set(element.name.text, "TimerSystem");
-    }
-    if (timersModule) {
-      if (binding && ts.isNamespaceImport(binding)) namespaces.add(binding.name.text);
-      if (statement.importClause?.name) namespaces.add(statement.importClause.name.text);
-    }
-  }
-  // 传播局部函数别名，避免改名后绕过；跨文件任意封装仍需评审。
-  // Propagate local aliases; arbitrary cross-file wrappers still require review.
-  const declarations: ts.VariableDeclaration[] = [];
-  const collect = (node: ts.Node): void => { if (ts.isVariableDeclaration(node)) declarations.push(node); ts.forEachChild(node, collect); };
-  collect(tree);
-  for (let pass = 0; pass <= declarations.length; pass++) {
-    let changed = false;
-    for (const declaration of declarations) {
-      if (!ts.isIdentifier(declaration.name) || !declaration.initializer || aliases.has(declaration.name.text)) continue;
-      const kind = forbidden(declaration.initializer);
-      if (kind) { aliases.set(declaration.name.text, kind); changed = true; }
-    }
-    if (!changed) break;
-  }
+  collect(tree, rootScope);
   visit(tree);
   return diagnostics;
 
+  // 先建立词法绑定，再解析别名；同名参数/局部声明必须遮蔽外层导入。
+  // Build lexical bindings first; same-named parameters and locals shadow outer imports.
+  function collect(node: ts.Node, parent: Scope): void {
+    if ((ts.isFunctionDeclaration(node) || ts.isClassDeclaration(node) || ts.isEnumDeclaration(node)) && node.name) {
+      parent.bindings.set(node.name.text, {});
+    }
+    const isFunction = ts.isFunctionLike(node);
+    const startsScope = isFunction || ts.isBlock(node) || ts.isCatchClause(node) || ts.isForStatement(node)
+      || ts.isForOfStatement(node) || ts.isForInStatement(node) || ts.isCaseBlock(node) || ts.isClassLike(node);
+    const scope: Scope = startsScope ? { parent, functionScope: isFunction, bindings: new Map() } : parent;
+    scopes.set(node, scope);
+    if ((ts.isFunctionExpression(node) || ts.isClassExpression(node)) && node.name) scope.bindings.set(node.name.text, {});
+    if (ts.isVariableDeclaration(node) || ts.isParameter(node)) {
+      let target = scope;
+      if (ts.isVariableDeclaration(node) && ts.isVariableDeclarationList(node.parent) && !(node.parent.flags & ts.NodeFlags.BlockScoped)) {
+        while (!target.functionScope && target.parent) target = target.parent;
+      }
+      const binding = ts.isVariableDeclaration(node) && node.initializer ? { initializer: node.initializer } : {};
+      bindName(node.name, binding, target);
+    }
+    if (ts.isImportDeclaration(node) && ts.isStringLiteral(node.moduleSpecifier) && !node.importClause?.isTypeOnly) {
+      const timersModule = /^(?:node:)?timers(?:\/promises)?$/.test(node.moduleSpecifier.text);
+      const clause = node.importClause;
+      if (clause?.name) scope.bindings.set(clause.name.text, timersModule ? { kind: "@namespace" } : {});
+      const binding = clause?.namedBindings;
+      if (binding && ts.isNamespaceImport(binding)) scope.bindings.set(binding.name.text, timersModule ? { kind: "@namespace" } : {});
+      if (binding && ts.isNamedImports(binding)) for (const element of binding.elements) {
+        if (element.isTypeOnly) continue;
+        const original = (element.propertyName ?? element.name).text;
+        const kind = original === "TimerSystem" ? "@timer" : timersModule && original === "scheduler" ? "@scheduler"
+          : (timersModule && nativeTimers.has(original)) || waits.has(original) ? original : undefined;
+        scope.bindings.set(element.name.text, kind ? { kind } : {});
+      }
+    }
+    ts.forEachChild(node, child => collect(child, scope));
+  }
+  function bindName(name: ts.BindingName, binding: Binding, scope: Scope): void {
+    if (ts.isIdentifier(name)) scope.bindings.set(name.text, binding);
+    else for (const element of name.elements) if (ts.isBindingElement(element)) bindName(element.name, {}, scope);
+  }
+  function resolveBinding(identifier: ts.Identifier): Binding | undefined {
+    let scope = scopes.get(identifier);
+    while (scope) {
+      const binding = scope.bindings.get(identifier.text);
+      if (binding) return binding;
+      scope = scope.parent;
+    }
+    return undefined;
+  }
   function forbidden(expression: ts.Expression): string | undefined {
-    if (ts.isParenthesizedExpression(expression) || ts.isAsExpression(expression) || ts.isNonNullExpression(expression)) return forbidden(expression.expression);
-    if (ts.isIdentifier(expression)) return aliases.get(expression.text) ?? (waits.has(expression.text) || nativeTimers.has(expression.text) ? expression.text : undefined);
+    const kind = classify(expression, new Set());
+    return kind?.startsWith("@") ? undefined : kind;
+  }
+  function classify(expression: ts.Expression, seen: Set<Binding>): string | undefined {
+    if (ts.isParenthesizedExpression(expression) || ts.isAsExpression(expression) || ts.isNonNullExpression(expression)) return classify(expression.expression, seen);
+    if (ts.isIdentifier(expression)) {
+      const binding = resolveBinding(expression);
+      if (binding) {
+        if (seen.has(binding)) return undefined;
+        seen.add(binding);
+        return binding.kind ?? (binding.initializer ? classify(binding.initializer, seen) : undefined);
+      }
+      if (expression.text === "globalThis" || expression.text === "window") return "@namespace";
+      if (expression.text === "scheduler") return "@scheduler";
+      if (/^(?:TimerSystem|Timer|TimeHelper|timer|timerSystem)$/.test(expression.text)) return "@timer";
+      return waits.has(expression.text) || nativeTimers.has(expression.text) ? expression.text : undefined;
+    }
     if (ts.isPropertyAccessExpression(expression) || ts.isElementAccessExpression(expression)) {
       const name = ts.isPropertyAccessExpression(expression) ? expression.name.text
         : expression.argumentExpression && ts.isStringLiteral(expression.argumentExpression) ? expression.argumentExpression.text : "";
-      const owner = expression.expression.getText(tree);
+      const owner = classify(expression.expression, seen);
       if (waits.has(name)) return name;
-      if (nativeTimers.has(name) && (owner === "globalThis" || owner === "window" || namespaces.has(owner))) return name;
-      if (name === "WaitAsync" && /(?:TimerSystem|Timer|TimeHelper|timer|timerSystem)(?:\.Instance)?$/.test(owner)) return name;
-      if (name === "WaitAsync" && [...aliases].some(([alias, original]) => original === "TimerSystem" && (owner === alias || owner === `${alias}.Instance`))) return name;
-      if (name === "wait" && (owner === "scheduler" || /\.scheduler$/.test(owner))) return name;
+      if (name === "Instance" && owner === "@timer") return "@timer";
+      if (name === "scheduler" && owner === "@namespace") return "@scheduler";
+      if (nativeTimers.has(name) && owner === "@namespace") return name;
+      if (name === "WaitAsync" && owner === "@timer") return name;
+      if (name === "wait" && owner === "@scheduler") return name;
     }
     return undefined;
   }

@@ -38,6 +38,20 @@ test("returns 1 when project diagnostics contain an error", async (context) => {
   assert.ok(output.diagnostics.some((item) => item.code === "tiangz.typescript.syntax"));
 });
 
+test("CLI blocks only the real time call when an imported alias is shadowed", async (context) => {
+  const root = await fixture(context);
+  const source = "import { setTimeout as pause } from 'node:timers/promises';\n"
+    + "async function valid(pause: () => Promise<void>) { await pause(); }\n"
+    + "async function invalid() { await pause(10); }\n";
+  await write(root, "app/hotfix/Upgrade.ts", source);
+  const result = run(root, "--format", "json");
+  assert.equal(result.status, 1, result.stderr);
+  const diagnostics = JSON.parse(result.stdout).diagnostics.filter(item => item.code === "tiangz.timer.time-wait-forbidden");
+  assert.equal(diagnostics.length, 1);
+  assert.equal(diagnostics[0].location.line, 2);
+  assert.equal(diagnostics[0].severity, "error");
+});
+
 test("can promote generated orphan warnings to a failed check", async (context) => {
   const root = await fixture(context);
   await write(root, "app/generated/Orphan.ts", "export const orphan = true;\n");
