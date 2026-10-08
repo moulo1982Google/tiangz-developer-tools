@@ -13,3 +13,8 @@ Host、DBProxy 与 Examples 根版本为 0.7.0-rc1。Developer Core 0.16.1-rc.2�
 5. 真实 PG/Redis、故障、性能与长稳只在重新核对过的隔离环境执行，先小范围验证，再按既定门槛推进。已有失败和容量缺口保留，不因 RC 发布改为通过。
 
 环境前置：220 的测试 PostgreSQL/Redis/cache 在最近检查时已停止；不得沿用旧运行快照或自动启动共享服务。新测量记录限额、挂载、镜像、启动时间和新 RunId，保留原始证据。既有 DBProxy R7 24h 只适用于其记录的精确产品与工具 SHA，不能直接继承为这次六仓库制品的联合资格。
+
+
+## 发布前依赖复核
+
+兼容更新 brace-expansion 的两个间接依赖实例，修复生产依赖的拒绝服务告警。npm audit --omit=dev 为零漏洞，完整 npm run check 通过。完整开发/打包依赖审计仍有 10 high、2 moderate（包括 MCP 测试客户端、vsce 的传递依赖）；这些项未豁免、未称安全通过，需在后续打包工具升级中处理，部分修复要求 vsce 主版本升级。GitHub Release 发布前更新本轮候选标签，其他历史标签不变。
