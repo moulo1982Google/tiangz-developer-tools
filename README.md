@@ -1,8 +1,8 @@
-> 本轮发布：`v0.7.0-rc2`，六仓库统一套件标签的预发行版本；本仓库新增 HTTP Handler 的共享 Hotfix 检查，Core 升为 0.16.1-rc.3、VSIX 升为 0.16.3。rc1 标签与制品保持原身份，说明见 [RELEASE-v0.7.0-rc2.md](RELEASE-v0.7.0-rc2.md)。
+> 本轮发布：套件 TiangZ 0.7.0 正式版，本仓库标签 `v0.16.1`（仓库内已有的 `v0.7.0` 是 2026-07 的旧包版本，保持不动）。相对 v0.7.0-rc2 无代码改动；说明见 [RELEASE-v0.16.1.md](RELEASE-v0.16.1.md)。
 
 # TiangZ Developer Tools
 
-本地 0.7 联合候选：共享 Core `0.16.1-rc.3`，VSIX `0.16.3`。预发行 VSIX 在 `npm run build:extension` 后通过 `node tools/package-extension.mjs --pre-release` 打包；tag、包文件名、包内版本与 SHA256 分别记录。候选未 push、未发布。RC2 修复 MCP 握手版本并补齐独立分发的依赖许可证/构建哈希；RC1 tag 和旧制品仍保留。
+当前版本：共享 Core `0.16.1`，VSIX `0.16.3`（正式版，非预发行）。VSIX 在 `npm run build:extension` 后通过 `npm run package:extension` 打包；tag、包文件名、包内版本与 SHA256 分别记录。RC2 修复的 MCP 握手版本与独立分发许可证/构建哈希保留；RC1/RC2 tag 和旧制品仍保留。
 
 打开多个仓库的上层目录时，“TiangZ 工程”树会识别当前目录或直属子目录中的主工程（app/core/public.ts + package.json）与独立工程声明（tiangz.project.json），按真实工程根分别索引，不递归扫描缓存、链接或更深层目录。“创建模块入门工程”也支持在直属子目录寻找宿主；多个候选需选择，显式 engineRoot/工程声明错误不会静默回退。创建前显示宿主与目标路径，目标相对当前打开的目录解析。子工程任务归属已打开的工作区，但命令在真实子工程目录执行。
 
