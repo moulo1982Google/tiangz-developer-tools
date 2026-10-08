@@ -12,7 +12,7 @@ export interface HotfixStateOptions {
 export type HotfixDecoratorKind = "System" | "Handler";
 const systems = new Set(["hotfixFor", "systemFor"]);
 const handlers = new Set([
-  "messageHandler", "rpcHandler", "sessionMessageHandler", "sessionRpcHandler",
+  "messageHandler", "rpcHandler", "httpHandler", "sessionMessageHandler", "sessionRpcHandler",
   "unitMessageHandler", "unitRpcHandler", "syncEventHandler", "vetoEventHandler", "entityExtensionHandler",
 ]);
 

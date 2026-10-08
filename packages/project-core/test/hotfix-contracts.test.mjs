@@ -10,6 +10,7 @@ const decoratorSource = `${coreSource}
 export declare function systemFor(...args: any[]): any;
 export declare function entityExtensionHandler(...args: any[]): any;
 export declare function rpcHandler(...args: any[]): any;
+export declare function httpHandler(...args: any[]): any;
 `;
 const hotfixFile = "app/hotfix/game/Test.ts";
 function fixture(text, extra = {}) {
@@ -50,6 +51,66 @@ class Allowed { Run() {} get value() { return 1; } set value(value: number) {} }
     status: "checked", ruleSetVersion: 2, typescriptVersion: ts.version, diagnostics,
   });
   assert.deepEqual(snapshot.diagnostics.filter(item => item.code.startsWith("tiangz.hotfix.")), diagnostics);
+});
+
+test("HTTP handlers use current Core symbols and share every Hotfix member restriction", () => {
+  const text = `import { httpHandler } from "../../core/public";
+import { renamed as bind } from "../../core/bridge";
+import * as core from "../../core/public";
+@httpHandler("/test")
+class Bad {
+  value = 1;
+  declared!: number;
+  constructor() {}
+  static value = 1;
+  static { }
+  static method() {}
+  static get accessor() { return 1; }
+}
+@bind("/alias") class Alias { state = 1; }
+@core.httpHandler("/namespace") class Namespace { state = 1; }
+@httpHandler("/valid") class Valid { Run() {} get value() { return 1; } set value(value: number) {} }
+`;
+  const { program, options, source } = fixture(text, {
+    "app/core/bridge.ts": 'export { httpHandler as renamed } from "./public";',
+  });
+  const diagnostics = runtimeContractDiagnostics(program, options);
+  assert.deepEqual(diagnostics.map(item => [item.code, item.severity, item.location.line]),
+    [5, 6, 7, 8, 9, 10, 11, 13, 14].map(line => ["tiangz.hotfix.instance-state", "error", line]));
+  assert.ok(diagnostics.every(item => item.location.relativePath === hotfixFile));
+  assert.deepEqual(source.statements.filter(ts.isClassDeclaration).map(node =>
+    restrictedHotfixDecoratorKind(node, program.getTypeChecker(), options)),
+  ["Handler", "Handler", "Handler", "Handler"]);
+});
+
+test("HTTP handler homonyms and other Core roots are not framework handlers", () => {
+  const text = `import { httpHandler as old } from "../../core-old/public";
+function httpHandler(...args: any[]): any {}
+@old("/old") class Old { state = 1; constructor() {} static method() {} }
+@httpHandler("/local") class Local { state = 1; constructor() {} static method() {} }
+`;
+  const { program, options, source } = fixture(text, { "app/core-old/public.ts": decoratorSource });
+  assert.deepEqual(runtimeContractDiagnostics(program, options), []);
+  assert.deepEqual(source.statements.filter(ts.isClassDeclaration).map(node =>
+    restrictedHotfixDecoratorKind(node, program.getTypeChecker(), options)), [undefined, undefined]);
+  assert.deepEqual(hotfixClassDiagnostics(source, undefined, options), []);
+});
+
+test("unresolved HTTP stable imports only produce unverified warnings", () => {
+  const text = `import { httpHandler as bind } from "#tiangz/model";
+import * as model from "#tiangz/model";
+@bind("/alias") class Alias { state = 1; }
+@model.httpHandler("/namespace") class Namespace { state = 1; }
+`;
+  const { program, options, source } = fixture(text);
+  for (const diagnostics of [runtimeContractDiagnostics(program, options), hotfixClassDiagnostics(source, undefined, options)]) {
+    assert.deepEqual(diagnostics.map(item => [item.code, item.severity]), [
+      ["tiangz.hotfix.unverifiable", "warning"],
+      ["tiangz.hotfix.unverifiable", "warning"],
+    ]);
+  }
+  assert.deepEqual(source.statements.filter(ts.isClassDeclaration).map(node =>
+    restrictedHotfixDecoratorKind(node, program.getTypeChecker(), options)), [undefined, undefined]);
 });
 
 test("Hotfix leaves other hosts, local homonyms, Model state and benchmarks alone", () => {
