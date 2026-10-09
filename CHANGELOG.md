@@ -1,5 +1,10 @@
 # 更新记录
 
+## 0.16.2 / VSIX 0.16.4（套件 TiangZ 0.7.1，标签 `v0.16.2`，2026-10-08）
+
+- 开发与打包依赖：`npm audit fix` 与 `@vscode/vsce` ^4.0.0，`npm audit`（全部与生产）由 10 high + 2 moderate 降为 0。vsce 4 要求 Node ≥ 22。
+- Core 与 VSIX 功能不变；VSIX 文件清单与清单文件和 0.16.3 一致。随包 MCP bundle 不变，构建锁哈希随依赖锁变化。
+
 ## 0.16.1 / VSIX 0.16.3（正式版，套件 TiangZ 0.7.0，标签 `v0.16.1`，2026-10-08）
 
 - 内容与 0.16.1-rc.3（套件 v0.7.0-rc2）相同，只去掉预发行后缀；VSIX 改为正式包（非 pre-release）。

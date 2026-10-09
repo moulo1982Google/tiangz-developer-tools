@@ -2,7 +2,7 @@
   "name": "tiangz-developer-tools",
   "displayName": "TiangZ Developer Tools",
   "description": "TiangZ Process、Scene、协议导航、运行与 TypeScript 调试工具",
-  "version": "0.16.3",
+  "version": "0.16.4",
   "publisher": "moulo",
   "author": "moulo",
   "license": "Apache-2.0",
