@@ -6,7 +6,7 @@
 
 0.16.3 的 MCP/CLI 保持原工具名称及请求/响应结构。首轮新 MCP 测试曾误按 structuredContent 读取规则目录；实际协议一直返回 text JSON 数组，已修正测试读取方式，未改服务器合同。复验入口为 `npm run test:design`、`test:design-cli`、`test:design-mcp` 与完整 `npm run check`。
 
-当前开发版本：共享 Core `0.16.3`（开发检查规则候选），VSIX `0.16.4`（既有正式版本；本轮未发布新 VSIX）。VSIX 在 `npm run build:extension` 后通过 `npm run package:extension` 打包（vsce 4，要求 Node ≥ 22）；tag、包文件名、包内版本与 SHA256 分别记录。RC1/RC2 tag 保留。
+当前开发版本：共享 Core `0.16.3`（开发检查规则候选），VSIX `0.16.5`（内含 Core 0.16.3 的 29 条规则；商店上的上一版是 0.16.4）。VSIX 在 `npm run build:extension` 后通过 `npm run package:extension` 打包（vsce 4，要求 Node ≥ 22）；tag、包文件名、包内版本与 SHA256 分别记录。RC1/RC2 tag 保留。
 
 打开多个仓库的上层目录时，“TiangZ 工程”树会识别当前目录或直属子目录中的主工程（app/core/public.ts + package.json）与独立工程声明（tiangz.project.json），按真实工程根分别索引，不递归扫描缓存、链接或更深层目录。“创建模块入门工程”也支持在直属子目录寻找宿主；多个候选需选择，显式 engineRoot/工程声明错误不会静默回退。创建前显示宿主与目标路径，目标相对当前打开的目录解析。子工程任务归属已打开的工作区，但命令在真实子工程目录执行。
 
