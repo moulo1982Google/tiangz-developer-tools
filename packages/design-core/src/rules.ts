@@ -25,6 +25,11 @@ export const DESIGN_RULES: readonly DesignRule[] = [
   rule("data.native-measure-first", "Native先测量", "只有实测收益支持时才把高频权威数据下沉Rust。", "docs/patterns/data-placement.md"),
   rule("data.coarse-op", "粗粒度Native操作", "TS与Rust之间使用粗粒度批处理，避免Update中逐对象逐字段往返。", "docs/patterns/data-placement.md"),
   rule("data.generated-boundary", "生成边界", "Native Ref、Rust Pool和FastOp由codegen生成，业务不手写桥代码。", "docs/patterns/data-placement.md"),
+  rule("model.export-shape", "真实 Model 导出", "当前真实判定允许函数值（含构造函数）、原始值、数组或普通对象；冻结 Set/Map 仍非法，Component 实例字段可用集合。执行声明宿主真实导出预检，函数是否适合业务另判，Native 声明桥不证明运算。", "docs/patterns/development-validation.md"),
+  rule("protocol.post-merge", "合并后协议检查", "无文本冲突也要检查最终合并树的协议锁、生成物与声明 SDK 目标；撞号失败不静默改已发布编号。", "docs/patterns/development-validation.md"),
+  rule("persistence.no-change-identity", "无变化操作身份", "先处理 pending，再按该操作指纹和历史回执契约判断 no-op；根据业务决定持久回执，不强制所有 no-op 写库。", "docs/patterns/development-validation.md"),
+  rule("persistence.domain-integration", "领域完整接入", "新增领域显式接齐加载、codec、验证、规划、写入、回执、恢复、视图和副作用；复用游戏事务路径，完整登记不证明经济规则正确。", "docs/patterns/development-validation.md"),
+  rule("validation.target-execution", "目标执行证据", "跨端推算需要共享参数与真实服务端样本；源测试、Node 执行和编译成功不能代替实际目标客户端验证。核对所用宿主、SDK 与制品身份。", "docs/patterns/development-validation.md"),
 ] as const;
 
 const RULES_BY_ID = new Map(DESIGN_RULES.map((item) => [item.id, item]));

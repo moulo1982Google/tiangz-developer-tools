@@ -28,6 +28,10 @@ test("MCP暴露只读设计规则和Quest推荐", async () => {
       "list_design_rules",
       "recommend_system_design",
     ]);
+    const rules = await client.callTool({ name: "list_design_rules", arguments: {} });
+    const catalogue = JSON.parse(rules.content.find(part => part.type === "text").text);
+    assert.equal(catalogue.length, 29);
+    assert.ok(catalogue.some(rule => rule.id === "protocol.post-merge"));
     const result = await client.callTool({
       name: "recommend_system_design",
       arguments: { archetype: "quest" },
@@ -36,6 +40,8 @@ test("MCP暴露只读设计规则和Quest推荐", async () => {
     const text = result.content.find((part) => part.type === "text")?.text ?? "";
     assert.match(text, /QuestComponent只持有进行中Quest/);
     assert.equal(result.structuredContent?.archetype, "quest");
+    assert.ok(result.structuredContent.ruleIds.includes("persistence.no-change-identity"));
+    assert.match(text, /不能代替实际目标客户端验证/);
   } finally {
     await client.close();
   }

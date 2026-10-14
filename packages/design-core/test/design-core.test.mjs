@@ -10,12 +10,31 @@ import {
 
 test("稳定规则目录没有重复并覆盖全部领域文档编号", () => {
   const ids = DESIGN_RULES.map((rule) => rule.id);
-  assert.equal(ids.length, 24);
+  assert.equal(ids.length, 29);
   assert.equal(new Set(ids).size, ids.length);
   assert.ok(ids.includes("persistence.record"));
   assert.ok(ids.includes("execution.update"));
   assert.ok(ids.includes("data.coarse-op"));
   assert.ok(ids.includes("data.generated-boundary"));
+});
+
+test("开发规则对适用建议生效且不冒充运行验证", () => {
+  for (const archetype of ["item", "buff", "quest", "achievement", "numeric", "custom"]) {
+    const request = { archetype, name: "接入检查" };
+    const first = recommendSystemDesign(request), second = recommendSystemDesign(request);
+    assert.deepEqual(first, second);
+    for (const id of ["model.export-shape", "protocol.post-merge", "persistence.no-change-identity", "persistence.domain-integration", "validation.target-execution"]) {
+      assert.ok(first.ruleIds.includes(id));
+    }
+    assert.ok(first.documents.includes("docs/patterns/development-validation.md"));
+    const text = formatDesignRecommendation(first);
+    assert.match(text, /冻结 Set\/Map 仍非法/);
+    assert.match(text, /不强制所有 no-op 写库/);
+    assert.match(text, /不能代替实际目标客户端验证/);
+  }
+  const transient = recommendSystemDesign({ archetype: "custom", persistent: false });
+  assert.ok(!transient.ruleIds.includes("persistence.no-change-identity"));
+  assert.ok(!transient.ruleIds.includes("persistence.domain-integration"));
 });
 
 test("Buff只同步生命周期事件，Tick结果委托给对应领域", () => {

@@ -26,14 +26,18 @@ export function inferSystemArchetype(text: string): SystemArchetype {
 }
 
 export function recommendSystemDesign(request: DesignRequest): DesignRecommendation {
+  let result: DesignRecommendation;
   switch (request.archetype) {
-    case "item": return itemRecommendation(request.name);
-    case "buff": return buffRecommendation(request.name);
-    case "quest": return questRecommendation(request.name);
-    case "achievement": return achievementRecommendation(request.name);
-    case "numeric": return numericRecommendation(request.name);
-    case "custom": return customRecommendation(request);
+    case "item": result = itemRecommendation(request.name); break;
+    case "buff": result = buffRecommendation(request.name); break;
+    case "quest": result = questRecommendation(request.name); break;
+    case "achievement": result = achievementRecommendation(request.name); break;
+    case "numeric": result = numericRecommendation(request.name); break;
+    case "custom": result = customRecommendation(request); break;
   }
+  const ruleIds = unique([...result.ruleIds, "model.export-shape", "protocol.post-merge", "validation.target-execution",
+    ...(request.persistent === false ? [] : ["persistence.no-change-identity", "persistence.domain-integration"])]);
+  return { ...result, ruleIds, documents: unique(ruleIds.map(id => getDesignRule(id).document)) };
 }
 
 export function formatDesignRecommendation(

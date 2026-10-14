@@ -20,6 +20,8 @@ test("支持机器可读JSON", async () => {
   const parsed = JSON.parse(result.stdout);
   assert.equal(parsed.archetype, "buff");
   assert.ok(parsed.ruleIds.includes("sync.none"));
+  assert.ok(parsed.ruleIds.includes("model.export-shape"));
+  assert.ok(parsed.documents.includes("docs/patterns/development-validation.md"));
 });
 
 test("拒绝未知系统类型", async () => {
