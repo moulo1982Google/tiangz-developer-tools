@@ -1,5 +1,10 @@
 # 更新记录
 
+## 0.16.6 / VSIX 0.16.6（套件 TiangZ 0.7.8，标签 `v0.16.6`）
+
+- 依赖安全补丁：`@modelcontextprotocol/server` 2.4.0、`zod` 4.6.7（`package.json` 下限同步提高），`@azure/identity` 4.14.1。审计高危清零；剩余 3 项 `minimatch` 中危（经 `vscode-languageclient`、`@vscode/vsce`），上游暂无修复版本。
+- Core 与 VSIX 版本统一为 0.16.6。规则、MCP/CLI 合同与 VSIX 内容不变（118 个文件与 0.16.5 相同，只有版本号）。
+
 ## VSIX 0.16.5（Core 0.16.3，套件 TiangZ 0.7.4）
 
 - 扩展随包的设计规则增加到 29 条，新增 5 条：模型导出、合并后协议检查、无操作的操作标识、领域集成覆盖、目标执行证据。

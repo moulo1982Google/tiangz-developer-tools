@@ -1,6 +1,6 @@
 {
   "name": "@tiangz/developer-tools-core",
-  "version": "0.16.3",
+  "version": "0.16.6",
   "description": "TiangZ 工程模型、静态索引与 VS Code 开发工具",
   "author": "moulo",
   "license": "Apache-2.0",
@@ -71,9 +71,9 @@
     "package:extension": "npm run package --workspace tiangz-developer-tools"
   },
   "dependencies": {
-    "@modelcontextprotocol/server": "^2.0.0",
+    "@modelcontextprotocol/server": "^2.4.0",
     "typescript": "^5.9.3",
-    "zod": "^4.4.3"
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@modelcontextprotocol/client": "^2.0.0",
